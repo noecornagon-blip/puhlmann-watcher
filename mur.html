@@ -141,6 +141,50 @@ footer{
   .brand i{display:none}
   .chips{display:none}
 }
+
+/* ---------- visuels Instagram (moteur du Studio TrouveTonMatos) ---------- */
+.mk{position:absolute;right:.5rem;bottom:.5rem;z-index:3;border:0;border-radius:999px;padding:.32rem .7rem;
+  background:#000c;color:#fff;font:700 .78rem/1 inherit;cursor:pointer;display:flex;align-items:center;gap:.3rem;
+  opacity:0;transform:translateY(.2rem);transition:opacity .2s,transform .2s;backdrop-filter:blur(4px)}
+.card:hover .mk,.card:focus-within .mk{opacity:1;transform:none}
+body.idle .mk{opacity:0!important}
+@media (hover:none){.mk{opacity:.95;transform:none}}
+.mk:hover{background:var(--rose)}
+#mkdlg{border:1px solid var(--line);background:var(--surf);color:var(--ink);border-radius:18px;padding:0;
+  width:min(1100px,96vw);max-height:94vh;font-size:15px;box-shadow:0 30px 90px #000b}
+#mkdlg::backdrop{background:#000a;backdrop-filter:blur(3px)}
+#mkdlg .hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);font-weight:800}
+#mkdlg .hd .x{margin-left:auto;border:0;background:none;color:var(--mute);font-size:20px;cursor:pointer}
+#mkdlg[open]{display:flex;flex-direction:column}
+#mkdlg .bd{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;padding:16px 18px;overflow:auto;flex:1;min-height:0}
+#mkdlg .hd,#mkdlg .ft{flex:none}
+#mkdlg .pv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+#mkdlg .pv canvas{border-radius:12px;background:#000;width:100%;height:auto;display:block}
+#mkdlg .ph2{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#mkdlg .ph2 label{position:relative;cursor:pointer}
+#mkdlg .ph2 img{width:64px;height:64px;object-fit:cover;border-radius:10px;border:2px solid transparent;display:block;opacity:.55}
+#mkdlg .ph2 input{position:absolute;opacity:0}
+#mkdlg .ph2 input:checked+img{border-color:var(--rose);opacity:1}
+#mkdlg .ph2 .bad img{filter:grayscale(1);opacity:.25}
+#mkdlg form{display:grid;gap:12px;align-content:start}
+#mkdlg label.f{display:grid;gap:5px;font-size:12px;font-weight:700;color:var(--mute)}
+#mkdlg input[type=text],#mkdlg input[type=number],#mkdlg select{background:var(--surf2);border:1px solid var(--line);border-radius:10px;
+  color:var(--ink);font:inherit;font-size:15px;padding:9px 11px;width:100%;min-width:0}
+#mkdlg input:focus,#mkdlg select:focus{outline:0;border-color:var(--rose)}
+#mkdlg .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#mkdlg .seg{display:flex;gap:6px;flex-wrap:wrap}
+#mkdlg .seg label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink)}
+#mkdlg .seg input{accent-color:var(--rose)}
+#mkdlg .sale{background:var(--surf2);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:baseline}
+#mkdlg .sale b{font-size:22px}
+#mkdlg .sale small{color:var(--mute);font-size:12px}
+#mkdlg .ft{display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+#mkdlg .ft .msg{color:var(--mute);font-size:13px;margin-right:auto}
+#mkdlg .go{border:0;border-radius:12px;padding:11px 18px;font:700 15px inherit;cursor:pointer;background:var(--rose);color:#fff}
+#mkdlg .go.alt{background:var(--surf2);color:var(--ink);border:1px solid var(--line)}
+#mkdlg .go:disabled{opacity:.5;cursor:default}
+#mkdlg a.lnk{color:var(--mute);font-size:13px}
+@media (max-width:800px){#mkdlg .bd{grid-template-columns:1fr}#mkdlg a.lnk{display:none}#mkdlg .ft .msg{flex-basis:100%}#mkdlg .go{flex:1}}
 </style>
 </head>
 <body>
@@ -185,6 +229,41 @@ footer{
   <div id="pager"></div>
 </footer>
 
+
+<dialog id="mkdlg" aria-labelledby="mkTitle">
+  <div class="hd"><span id="mkTitle">📸 Visuels Instagram</span><span id="mkSrc" style="color:var(--mute);font-weight:600;font-size:13px"></span><button class="x" id="mkClose" aria-label="Fermer">✕</button></div>
+  <div class="bd">
+    <div>
+      <div class="pv"><canvas id="pvStory" aria-label="Aperçu story"></canvas><canvas id="pvPost" aria-label="Aperçu post"></canvas></div>
+      <div class="ph2" id="mkPhotos"></div>
+    </div>
+    <form id="mkForm" autocomplete="off">
+      <label class="f">Titre<input type="text" name="title" maxlength="90"></label>
+      <div class="row">
+        <label class="f">Prix d'achat HT (€)<input type="number" name="buy" min="0" step="1" inputmode="decimal"></label>
+        <label class="f">Marge HT (€)<input type="number" name="margin" min="0" step="10" inputmode="decimal"></label>
+      </div>
+      <div class="row">
+        <label class="f">Arrondi du prix<select name="round"><option value="1">à l'euro</option><option value="10">à 10 €</option><option value="50">à 50 €</option><option value="100">à 100 €</option></select></label>
+        <label class="f">Prix de vente affiché (HT)<input type="number" name="sale" min="0" step="1" inputmode="decimal" placeholder="calculé"></label>
+      </div>
+      <div class="sale"><span>Sur le visuel</span><span><b id="mkSale">—</b> <small id="mkMarge"></small></span></div>
+      <div class="f"><span style="font-size:12px;font-weight:700;color:var(--mute)">Formats</span>
+        <div class="seg"><label><input type="checkbox" name="story" checked> Story 9:16</label><label><input type="checkbox" name="post" checked> Post carré</label></div></div>
+      <div class="row">
+        <label class="f">Résolution<select name="scale"><option value="2">Haute — 2160 px</option><option value="1">Standard — 1080 px</option></select></label>
+        <label class="f">Cadrage<select name="mode"><option value="cover">Remplir le cadre</option><option value="contain">Photo entière</option></select></label>
+      </div>
+      <label class="f">Zoom <input type="range" name="zoom" min="1" max="2.5" step="0.05" value="1"></label>
+    </form>
+  </div>
+  <div class="ft">
+    <span class="msg" id="mkMsg"></span>
+    <a class="lnk" href="https://trouvetonmatos-studio.vercel.app/studio/" target="_blank" rel="noopener">Ouvrir le Studio complet ↗</a>
+    <button class="go alt" id="mkShare" hidden>Partager</button>
+    <button class="go" id="mkGo">Télécharger les PNG</button>
+  </div>
+</dialog>
 <script>
 'use strict';
 /* ------------------------------------------------------------------ réglages */
@@ -326,6 +405,7 @@ function card(it) {
         <span class="site" style="background:${col}">${esc(it.siteName || it.site)}</span>
         ${etiquette}
       </div>
+      ${it.photos && it.photos.length ? `<span class="mk" role="button" tabindex="0" data-mk="${esc(it.key)}" title="Créer la story et le post pour Instagram">📸 Story / post</span>` : ''}
     </div>
     <div class="body">
       <div class="title">${esc(it.title)}</div>
@@ -443,6 +523,7 @@ function flash(txt) {
 }
 
 function turnPage() {
+  if ($('#mkdlg')?.open) return;   // pas de rotation pendant la création d'un visuel
   const pages = Math.max(1, Math.ceil(feedSize() / cap));
   if (pages < 2) return;
   page = (page + 1) % pages;
@@ -471,6 +552,7 @@ $('#full').onclick = () => {
   else document.documentElement.requestFullscreen?.();
 };
 addEventListener('keydown', (e) => {
+  if ($('#mkdlg').open || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
   const k = e.key.toLowerCase();
   if (k === 'f') $('#full').click();
   else if (k === 'r') refresh();
@@ -491,6 +573,163 @@ addEventListener('mousemove', () => {
 });
 addEventListener('resize', render);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+
+
+/* ------------------------------------------------------------------ visuels Instagram
+   Utilise le moteur de rendu du Studio TrouveTonMatos (render-core.js + modèle de story),
+   chargé à la première utilisation : les visuels sont identiques à ceux du Studio.
+   Les photos sont chargées en CORS ; les sites qui ne l'autorisent pas passent par le
+   relais d'images public wsrv.nl, faute de quoi le navigateur interdirait l'export PNG. */
+const STUDIO = 'https://trouvetonmatos-studio.vercel.app/studio/';
+const MK = { engine: null, item: null, photos: [], busy: false, preview: null };
+const loadScript = (src) => new Promise((ok, ko) => {
+  const s = document.createElement('script'); s.src = src; s.onload = ok;
+  s.onerror = () => ko(new Error('Studio injoignable (' + src.split('/').pop() + ')'));
+  document.head.appendChild(s);
+});
+const newCanvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
+function loadEngine() {
+  if (!MK.engine) MK.engine = (async () => {
+    if (!window.TTMRender) await loadScript(STUDIO + 'render-core.js');
+    if (!window.TTM_TEMPLATES?.story) await loadScript(STUDIO + 'assets/template-story.js');
+    const R = window.TTMRender, T = R.TEMPLATES;
+    const img = new Image(); img.src = window.TTM_TEMPLATES.story; await img.decode();
+    T.story.image = img;
+    if (T.story.autodetect) { const f = R.detectSlot(img, newCanvas); if (f) T.story.slot = f; }  // comme le Studio
+    T.post.image = R.buildPostTemplate(img, newCanvas);
+    return R;
+  })().catch((e) => { MK.engine = null; throw e; });
+  return MK.engine;
+}
+function loadPhoto(url) {
+  const tryLoad = (src) => new Promise((ok, ko) => {
+    const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
+    im.onload = () => ok(im); im.onerror = ko; im.src = src;
+  });
+  return tryLoad(url).catch(() => tryLoad('https://wsrv.nl/?url=' + encodeURIComponent(url)));
+}
+const slug = (t) => String(t || 'visuel').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'visuel';
+const num = (v) => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+
+function salePrice() {
+  const f = $('#mkForm');
+  const manual = num(f.sale.value);
+  if (manual != null && f.sale.dataset.touched === '1') return manual;
+  const buy = num(f.buy.value), m = num(f.margin.value) || 0, r = Number(f.round.value) || 1;
+  if (buy == null) return null;
+  const raw = buy + m;   // marge HT en euros, ajoutée au prix d'achat HT
+  return Math.ceil(raw / r) * r;
+}
+function selectedPhotos() { return MK.photos.filter((p) => p.ok && p.checked); }
+
+function drawPreview() {
+  const R = window.TTMRender; if (!R || !MK.item) return;
+  const f = $('#mkForm'), sale = salePrice(), buy = num(f.buy.value);
+  $('#mkSale').textContent = sale == null ? 'saisissez le prix d’achat' : R.formatPrice(String(sale)) + ' HT';
+  $('#mkMarge').textContent = sale != null && buy != null ? `dont marge ${R.formatPrice(String(Math.round(sale - buy)))}` : '';
+  if (f.sale.dataset.touched !== '1') f.sale.placeholder = sale == null ? 'calculé' : String(sale);
+  const p = (MK.preview != null && MK.photos[MK.preview]?.ok && MK.photos[MK.preview].checked ? MK.photos[MK.preview] : null) || selectedPhotos()[0];
+  for (const key of ['story', 'post']) {
+    const cv = $(key === 'story' ? '#pvStory' : '#pvPost'), T = R.TEMPLATES[key], k = .5;
+    cv.width = T.w * k; cv.height = T.h * k; cv.style.display = f[key].checked ? '' : 'none';
+    R.compose(cv.getContext('2d'), { template: T.image, geom: T, scale: k, placeholder: !p,
+      photo: p ? { source: p.img, naturalWidth: p.img.naturalWidth, naturalHeight: p.img.naturalHeight, zoom: Number(f.zoom.value), dx: 0, dy: 0, mode: f.mode.value, bg: '#000' } : null,
+      text: { title: f.title.value, price: sale == null ? '' : String(sale), tax: 'HT' } });
+  }
+  const n = selectedPhotos().length * ((f.story.checked ? 1 : 0) + (f.post.checked ? 1 : 0));
+  $('#mkGo').textContent = n ? `Télécharger ${n} PNG` : 'Télécharger les PNG';
+  $('#mkGo').disabled = !n || sale == null || MK.busy;
+  $('#mkShare').disabled = $('#mkGo').disabled;
+}
+
+async function renderAll() {
+  const R = await loadEngine(), f = $('#mkForm'), sale = salePrice(), k = Number(f.scale.value);
+  const out = [], base = slug(f.title.value);
+  const photos = selectedPhotos();
+  for (const [i, p] of photos.entries()) for (const key of ['story', 'post']) {
+    if (!f[key].checked) continue;
+    const T = R.TEMPLATES[key], cv = newCanvas(T.w * k, T.h * k);
+    R.compose(cv.getContext('2d'), { template: T.image, geom: T, scale: k,
+      photo: { source: p.img, naturalWidth: p.img.naturalWidth, naturalHeight: p.img.naturalHeight, zoom: Number(f.zoom.value), dx: 0, dy: 0, mode: f.mode.value, bg: '#000' },
+      text: { title: f.title.value, price: String(sale), tax: 'HT' } });
+    const blob = await new Promise((ok) => cv.toBlob(ok, 'image/png'));
+    out.push(new File([blob], `${base}-${key}${photos.length > 1 ? '-' + (i + 1) : ''}.png`, { type: 'image/png' }));
+  }
+  return out;
+}
+
+async function openMaker(key) {
+  const it = feed.find((x) => x.key === key) || (DATA?.items || []).find((x) => x.key === key);
+  if (!it) return;
+  MK.item = it; MK.photos = []; MK.preview = null;
+  const f = $('#mkForm'), saved = store.get('mur-marge-eur', { margin: 500, round: 10, scale: 2, mode: 'cover' });
+  f.title.value = it.title || '';
+  f.buy.value = it.priceEUR != null ? Math.round(it.priceEUR) : '';
+  f.margin.value = saved.margin; f.round.value = saved.round; f.scale.value = saved.scale; f.mode.value = saved.mode;
+  f.zoom.value = 1; f.sale.value = ''; f.sale.dataset.touched = '';
+  $('#mkSrc').textContent = `${it.siteName || it.site}${it.currency === 'USD' ? ' · prix converti en €' : ''}`;
+  $('#mkMsg').textContent = 'Chargement du Studio et des photos…';
+  $('#mkPhotos').innerHTML = '';
+  $('#mkShare').hidden = !(navigator.canShare && navigator.canShare({ files: [new File([''], 'a.png', { type: 'image/png' })] }));
+  $('#mkdlg').showModal();
+  try { await loadEngine(); } catch (e) { $('#mkMsg').textContent = e.message; return; }
+  // toutes les photos de l'annonce sont exportées par défaut (décochez celles à écarter)
+  const list = [...new Set(it.photos || [])].slice(0, 30);
+  $('#mkPhotos').innerHTML = list.map((u, i) => `<label data-i="${i}" title="Photo ${i + 1}"><input type="checkbox" checked><img src="${esc(u)}" alt="" referrerpolicy="no-referrer"></label>`).join('');
+  MK.photos = list.map((u) => ({ url: u, ok: false, checked: true, img: null }));
+  await Promise.all(MK.photos.map(async (p, i) => {
+    try { p.img = await loadPhoto(p.url); p.ok = true; }
+    catch { p.ok = false; const l = document.querySelector(`#mkPhotos [data-i="${i}"]`); l?.classList.add('bad'); if (l) l.querySelector('input').checked = false; }
+  }));
+  if (MK.item !== it) return;
+  const bad = MK.photos.filter((p) => !p.ok).length;
+  const okN = MK.photos.filter((p) => p.ok).length;
+  $('#mkMsg').textContent = `${okN} photo${okN > 1 ? 's' : ''} prête${okN > 1 ? 's' : ''}${bad ? ` · ${bad} inaccessible${bad > 1 ? 's' : ''} (grisée${bad > 1 ? 's' : ''})` : ''}. Décochez celles à écarter.`;
+  drawPreview();
+}
+
+$('#grid').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mk]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation(); openMaker(b.dataset.mk);
+});
+$('#grid').addEventListener('keydown', (e) => {
+  const b = e.target.closest('[data-mk]'); if (!b || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault(); openMaker(b.dataset.mk);
+});
+$('#mkPhotos').addEventListener('change', (e) => {
+  const l = e.target.closest('label'); if (!l) return;
+  const p = MK.photos[Number(l.dataset.i)]; if (p) p.checked = e.target.checked;
+  MK.preview = e.target.checked ? Number(l.dataset.i) : null; drawPreview();
+});
+$('#mkForm').addEventListener('input', (e) => {
+  if (e.target.name === 'sale') e.target.dataset.touched = e.target.value ? '1' : '';
+  const f = $('#mkForm');
+  store.set('mur-marge-eur', { margin: num(f.margin.value) || 0, round: Number(f.round.value), scale: Number(f.scale.value), mode: f.mode.value });
+  drawPreview();
+});
+$('#mkForm').addEventListener('submit', (e) => e.preventDefault());
+$('#mkClose').onclick = () => $('#mkdlg').close();
+$('#mkdlg').addEventListener('close', () => { MK.item = null; });
+
+async function exportPngs(share) {
+  MK.busy = true; drawPreview(); $('#mkMsg').textContent = 'Création des images…';
+  try {
+    const files = await renderAll();
+    if (share) { await navigator.share({ files, title: $('#mkForm').title.value }); }
+    else for (const file of files) {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      await new Promise((ok) => setTimeout(ok, 350));   // laisse le navigateur enchaîner les téléchargements
+    }
+    $('#mkMsg').textContent = share ? 'Partagé.' : `✔ ${files.length} PNG téléchargé(s) (${$('#mkForm').scale.value === '2' ? '2160' : '1080'} px de large).`;
+  } catch (e) {
+    $('#mkMsg').textContent = e.name === 'AbortError' ? 'Partage annulé.' : `Échec : ${e.message}`;
+  } finally { MK.busy = false; drawPreview(); }
+}
+$('#mkGo').onclick = () => exportPngs(false);
+$('#mkShare').onclick = () => exportPngs(true);
 
 /* ------------------------------------------------------------------ démarrage */
 render();
