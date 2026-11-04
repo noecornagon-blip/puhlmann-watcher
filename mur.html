@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Veille matos — Mur</title>
+<meta name="description" content="Écran mural des dernières annonces de matériel détectées, actualisé en continu.">
+<style>
+:root{
+  --bg:#0d0f13; --surf:#171b22; --surf2:#1e242d; --line:#2a313c;
+  --ink:#f4f6f8; --mute:#98a2b3; --rose:#ff385c; --ok:#2bc46a; --warn:#f5a524;
+  --r:16px;
+  --pad:clamp(12px,1.6vh,28px);
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f6f7f9; --surf:#fff; --surf2:#f1f3f6; --line:#e3e6ea;
+    --ink:#16181d; --mute:#6b7280;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --surf:#fff; --surf2:#f1f3f6; --line:#e3e6ea;
+  --ink:#16181d; --mute:#6b7280;
+}
+*{box-sizing:border-box;margin:0}
+html{font-size:clamp(15px,1.15vh + .35vw,28px)}
+body{
+  height:100vh; overflow:hidden; background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  display:flex; flex-direction:column;
+}
+body.idle{cursor:none}
+a{color:inherit;text-decoration:none}
+
+/* ---------- barre de progression vers la prochaine vérification ---------- */
+#bar{height:.22rem;background:var(--rose);width:0;flex:none;transition:width .5s linear;opacity:.85}
+
+/* ---------- en-tête ---------- */
+header{
+  flex:none; display:flex; align-items:center; gap:var(--pad);
+  padding:var(--pad) calc(var(--pad)*1.4) calc(var(--pad)*.7);
+}
+.brand{display:flex;align-items:baseline;gap:.5rem;font-weight:800;letter-spacing:-.03em;font-size:1.5rem;white-space:nowrap}
+.brand svg{width:1.5rem;height:1.5rem;flex:none;align-self:center}
+.brand i{color:var(--mute);font-style:normal;font-weight:600;font-size:.85rem;letter-spacing:0}
+.spacer{flex:1}
+.chips{display:flex;gap:.5rem;flex:none}
+.chip{
+  background:var(--surf); border:1px solid var(--line); border-radius:999px;
+  padding:.3rem .8rem; font-size:.82rem; font-weight:600; color:var(--mute); white-space:nowrap;
+}
+.chip b{color:var(--ink);font-size:1rem}
+.chip.hot{border-color:var(--rose);color:var(--rose)}
+.chip.hot b{color:var(--rose)}
+.live{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--mute);white-space:nowrap}
+.dot{width:.55rem;height:.55rem;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 0 currentColor;animation:pulse 2.6s infinite}
+.dot.bad{background:var(--warn);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #2bc46a66}70%{box-shadow:0 0 0 .5rem #2bc46a00}100%{box-shadow:0 0 0 0 #2bc46a00}}
+.live b{color:var(--ink);font-size:.95rem}
+.iconbtn{
+  background:var(--surf);border:1px solid var(--line);color:var(--mute);border-radius:999px;
+  width:2rem;height:2rem;display:grid;place-items:center;font-size:.9rem;cursor:pointer;flex:none;
+}
+.iconbtn.on{border-color:var(--rose);color:var(--rose)}
+
+/* ---------- grille ---------- */
+main{
+  flex:1; min-height:0; display:grid; gap:var(--pad);
+  padding:0 calc(var(--pad)*1.4);
+}
+.card{
+  background:var(--surf); border:1px solid var(--line); border-radius:var(--r);
+  overflow:hidden; display:flex; flex-direction:column; min-height:0; position:relative;
+  animation:in .45s both;
+}
+@keyframes in{from{opacity:0;transform:translateY(.6rem)}to{opacity:1;transform:none}}
+.card.just{border-color:var(--rose);box-shadow:0 0 0 .14rem #ff385c40}
+.card.just .shot::after{content:"";position:absolute;inset:0;background:var(--rose);opacity:.22;animation:flash 1.6s 3 both}
+@keyframes flash{0%,100%{opacity:0}50%{opacity:.22}}
+
+.shot{position:relative;flex:1 1 auto;min-height:0;background:var(--surf2);overflow:hidden}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot .ph{width:100%;height:100%;display:grid;place-items:center;font-size:2.4rem;opacity:.3}
+.tags{position:absolute;top:.5rem;left:.5rem;right:.5rem;display:flex;gap:.4rem;align-items:flex-start}
+.site{
+  font-size:.7rem;font-weight:800;letter-spacing:.02em;text-transform:uppercase;
+  padding:.22rem .5rem;border-radius:.4rem;color:#fff;background:#555;backdrop-filter:blur(4px);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%;
+}
+.new{
+  margin-left:auto;font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  padding:.22rem .5rem;border-radius:.4rem;background:var(--rose);color:#fff;white-space:nowrap;
+}
+.body{flex:none;padding:.65rem .8rem .7rem;display:flex;flex-direction:column;gap:.3rem}
+.title{
+  font-size:1rem;font-weight:700;line-height:1.25;letter-spacing:-.01em;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  height:2.5em; /* deux lignes réservées : toutes les cartes gardent la même hauteur */
+}
+.meta{display:flex;align-items:baseline;gap:.5rem;height:1.75rem}
+.price{font-size:1.3rem;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.price small{font-size:.7rem;font-weight:600;color:var(--mute)}
+.price.ask{font-size:1rem;color:var(--mute)}
+.when{margin-left:auto;font-size:.8rem;font-weight:600;color:var(--mute);white-space:nowrap}
+.when.fresh{color:var(--rose)}
+
+/* ---------- pied ---------- */
+footer{
+  flex:none; display:flex; align-items:center; gap:var(--pad);
+  padding:calc(var(--pad)*.7) calc(var(--pad)*1.4) var(--pad);
+  font-size:.78rem; color:var(--mute);
+}
+#srcs{display:flex;gap:.9rem;flex-wrap:wrap;min-width:0;overflow:hidden;height:1.2rem}
+#srcs span{display:flex;align-items:center;gap:.32rem;white-space:nowrap}
+#srcs i{width:.45rem;height:.45rem;border-radius:50%;background:var(--ok);display:block;flex:none}
+#srcs i.stale{background:var(--warn)}
+#srcs i.down{background:var(--rose)}
+#pager{margin-left:auto;display:flex;align-items:center;gap:.45rem;flex:none}
+#pager b{width:.5rem;height:.5rem;border-radius:50%;background:var(--line);display:block;transition:background .3s}
+#pager b.on{background:var(--rose)}
+#msg{flex:none;font-weight:600}
+
+/* ---------- état vide / chargement ---------- */
+#empty{
+  position:absolute;inset:0;display:none;place-items:center;text-align:center;
+  padding:2rem;font-size:1.1rem;color:var(--mute);
+}
+#empty.show{display:grid}
+#empty b{display:block;color:var(--ink);font-size:1.6rem;margin-bottom:.5rem}
+#wrapmain{flex:1;min-height:0;display:flex;position:relative}
+#wrapmain main{flex:1}
+@media (max-width:700px){
+  .brand i{display:none}
+  .chips{display:none}
+}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ff385c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M14.5 4h-5L8 6.5H4.5A1.5 1.5 0 0 0 3 8v10a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 18V8a1.5 1.5 0 0 0-1.5-1.5H16z"/>
+      <circle cx="12" cy="13" r="3.4"/>
+    </svg>
+    Veille matos <i id="sub">dernières annonces détectées</i>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="chips">
+    <span class="chip hot" id="c24">24 h <b>–</b></span>
+    <span class="chip" id="c7j">7 j <b>–</b></span>
+    <span class="chip" id="ctot">au total <b>–</b></span>
+  </div>
+
+  <div class="live">
+    <span class="dot" id="dot"></span>
+    <span><b id="ago">connexion…</b><br><span id="gen">&nbsp;</span></span>
+  </div>
+
+  <button class="iconbtn" id="sound" title="Signal sonore à chaque nouvelle annonce (S)">🔕</button>
+  <button class="iconbtn" id="theme" title="Thème clair / sombre (T)">◐</button>
+  <button class="iconbtn" id="full" title="Plein écran (F)">⛶</button>
+</header>
+
+<div id="wrapmain">
+  <main id="grid"></main>
+  <div id="empty"><div><b>En attente de données</b><span id="emptysub">Lecture de data.json…</span></div></div>
+</div>
+
+<footer>
+  <div id="srcs"></div>
+  <div id="msg"></div>
+  <div id="pager"></div>
+</footer>
+
+<script>
+'use strict';
+/* ------------------------------------------------------------------ réglages */
+const CFG = {
+  // data.json publié par le watcher ; essayé en relatif d'abord (si la page est
+  // servie à côté), sinon en absolu (fichier local, autre hébergement).
+  urls: ['data.json', 'https://noecornagon-blip.github.io/puhlmann-watcher/data.json'],
+  refreshMs: 60 * 1000,    // vérification toutes les minutes
+  pageMs:    15 * 1000,    // rotation des pages
+  freshMs:   24 * 3600e3,  // badge « nouveau »
+  windowMs:  7 * 864e5,    // on montre TOUT ce qui est arrivé sur cette fenêtre
+  minPages:  2,            // ...sans jamais descendre sous 2 écrans
+  maxPages:  8,            // ...ni dépasser 8 écrans (garde-fou si une source déverse tout d'un coup)
+};
+
+// Nombre d'annonces à afficher : tout ce qui est arrivé dans la fenêtre,
+// complété si la semaine a été calme, borné si elle a été exceptionnelle.
+function feedSize() {
+  const cut = Date.now() - CFG.windowMs;
+  const inWindow = feed.filter((i) => i._t >= cut).length;
+  return Math.min(feed.length, CFG.maxPages * cap, Math.max(inWindow, CFG.minPages * cap));
+}
+
+const SITE_COLORS = {
+  puhlmann:'#2f6fed', alangordon:'#d9480f', awgear:'#2b9a66', newlifecine:'#9c36b5',
+  newprovideo:'#e8590c', cinelenses:'#0c8599', broadcastsolutions:'#c2255c', cinemacameras:'#5c6470',
+};
+const GROUP_ICON = {
+  cameras:'🎥', lenses:'🔭', monitors:'🖥️', lights:'💡',
+  support:'🏗️', audio:'🎙️', accessories:'🔋', other:'📦',
+};
+
+/* ------------------------------------------------------------------ utilitaires */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const eur = new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+function ago(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 90) return s + ' s';
+  const m = Math.round(s / 60);
+  if (m < 90) return m + ' min';
+  const h = Math.round(m / 60);
+  if (h < 36) return h + ' h';
+  return Math.round(h / 24) + ' j';
+}
+
+/* ------------------------------------------------------------------ état */
+let DATA = null;          // dernier data.json lu
+let feed = [];            // annonces datées, plus récentes d'abord
+let known = null;         // clés déjà vues (null = premier chargement)
+let justKeys = new Set(); // nouveautés du dernier rafraîchissement
+let page = 0, cap = 8, cols = 4;
+let lastOk = 0, lastTry = 0, nextAt = Date.now() + CFG.refreshMs;
+let dataUrl = null;
+let soundOn = store.get('mur-sound', false);
+
+/* ------------------------------------------------------------------ lecture des données */
+async function load() {
+  lastTry = Date.now();
+  const tries = dataUrl ? [dataUrl] : CFG.urls;
+  let err;
+  for (const u of tries) {
+    try {
+      // 'no-cache' force la revalidation mais autorise un 304 : une lecture
+      // sans changement ne retélécharge donc rien.
+      const r = await fetch(u, { cache:'no-cache', signal: AbortSignal.timeout(25000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      if (!d || !Array.isArray(d.items)) throw new Error('format inattendu');
+      dataUrl = u;
+      return d;
+    } catch (e) { err = e; }
+  }
+  throw err || new Error('indisponible');
+}
+
+function ingest(d) {
+  DATA = d;
+  const fresh = [];
+  for (const it of d.items) {
+    const raw = it.firstSeen || it.added;
+    if (!raw) continue;                       // annonces présentes dès l'origine : pas une nouveauté
+    const t = +new Date(raw);
+    if (!t || t > Date.now() + 36e5) continue; // date absente ou aberrante
+    fresh.push({ ...it, _t: t });
+  }
+  fresh.sort((a, b) => b._t - a._t);
+  feed = fresh;
+
+  // nouveautés depuis la lecture précédente
+  const keys = new Set(feed.map((i) => i.key));
+  if (known) {
+    justKeys = new Set([...keys].filter((k) => !known.has(k)));
+  } else {
+    justKeys = new Set();                     // au premier chargement, rien ne « clignote »
+  }
+  known = keys;
+  lastOk = Date.now();
+  return justKeys.size;
+}
+
+/* ------------------------------------------------------------------ mise en page */
+function measure() {
+  const main = $('#grid');
+  const u = parseFloat(getComputedStyle(document.documentElement).fontSize) || 18;
+  const gap = parseFloat(getComputedStyle(main).gap) || 16;
+  const w = main.clientWidth, h = main.clientHeight;
+  cols = Math.max(1, Math.min(6, Math.floor((w + gap) / (21 * u + gap))));
+  const rows = Math.max(1, Math.min(4, Math.floor((h + gap) / (19 * u + gap))));
+  cap = Math.max(1, cols * rows);
+  main.style.gridTemplateColumns = `repeat(${cols},minmax(0,1fr))`;
+  main.style.gridTemplateRows = `repeat(${rows},minmax(0,1fr))`;
+}
+
+function card(it) {
+  const col = SITE_COLORS[it.site] || '#555';
+  const dt = Date.now() - it._t;
+  const shot = it.photos && it.photos[0]
+    ? `<img src="${esc(it.photos[0])}" alt="" loading="lazy" referrerpolicy="no-referrer"
+          onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph',textContent:'${GROUP_ICON[it.group] || '📦'}'}))">`
+    : `<div class="ph">${GROUP_ICON[it.group] || '📦'}</div>`;
+  const price = it.priceEUR == null
+    ? `<span class="price ask">Prix sur demande</span>`
+    : `<span class="price">${eur.format(it.priceEUR)}${it.currency === 'USD' ? ' <small>converti</small>' : ' <small>HT</small>'}</span>`;
+  return `<a class="card${justKeys.has(it.key) ? ' just' : ''}" href="${esc(it.url)}" target="_blank" rel="noreferrer">
+    <div class="shot">${shot}
+      <div class="tags">
+        <span class="site" style="background:${col}">${esc(it.siteName || it.site)}</span>
+        ${dt < CFG.freshMs ? '<span class="new">nouveau</span>' : ''}
+      </div>
+    </div>
+    <div class="body">
+      <div class="title">${esc(it.title)}</div>
+      <div class="meta">${price}<span class="when${dt < CFG.freshMs ? ' fresh' : ''}">il y a ${ago(dt)}</span></div>
+    </div>
+  </a>`;
+}
+
+function render() {
+  measure();
+  const shown = feed.slice(0, feedSize());
+  const pages = Math.max(1, Math.ceil(shown.length / cap));
+  if (page >= pages) page = 0;
+
+  $('#grid').innerHTML = shown.slice(page * cap, page * cap + cap).map(card).join('');
+  $('#empty').classList.toggle('show', !shown.length);
+
+  $('#pager').innerHTML = pages > 1
+    ? Array.from({ length: pages }, (_, i) => `<b class="${i === page ? 'on' : ''}"></b>`).join('')
+    : '';
+
+  renderMeta();
+}
+
+function renderMeta() {
+  const n24 = feed.filter((i) => Date.now() - i._t < 864e5).length;
+  const n7 = feed.filter((i) => Date.now() - i._t < 7 * 864e5).length;
+  $('#c24').innerHTML = `24 h <b>${n24}</b>`;
+  $('#c7j').innerHTML = `7 j <b>${n7}</b>`;
+  $('#ctot').innerHTML = `au total <b>${(DATA?.items.length || 0).toLocaleString('fr-FR')}</b>`;
+  $('#c24').classList.toggle('hot', n24 > 0);
+  const n = feedSize();
+  $('#sub').textContent = n7 >= n
+    ? `les ${n} plus récentes`
+    : `tout ce qui est arrivé depuis 7 jours · ${n} annonces`;
+
+  $('#srcs').innerHTML = (DATA?.sources || []).map((s) => {
+    const cls = !s.ok ? 'down' : (s.stale ? 'stale' : '');
+    return `<span><i class="${cls}"></i>${esc(s.name)}${s.count != null ? ' ' + s.count : ''}</span>`;
+  }).join('');
+}
+
+function renderClock() {
+  const offline = lastOk && lastTry > lastOk + 5000 && Date.now() - lastOk > CFG.refreshMs * 2;
+  $('#dot').classList.toggle('bad', !!offline);
+  if (!lastOk) {
+    $('#ago').textContent = 'connexion…';
+    $('#gen').textContent = '';
+  } else if (offline) {
+    $('#ago').textContent = 'hors ligne';
+    $('#gen').textContent = `données d'il y a ${ago(Date.now() - lastOk)}`;
+  } else {
+    $('#ago').textContent = 'vérifié il y a ' + ago(Date.now() - lastOk);
+    const g = DATA?.generatedAt ? new Date(DATA.generatedAt) : null;
+    $('#gen').textContent = g
+      ? `relevé des sites : ${g.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}`
+      : '';
+  }
+  const left = Math.max(0, nextAt - Date.now());
+  $('#bar').style.width = (100 - (left / CFG.refreshMs) * 100).toFixed(1) + '%';
+  // les durées relatives des cartes vieillissent sans tout redessiner
+  document.querySelectorAll('.card .when').forEach((el, i) => {
+    const it = feed[page * cap + i];
+    if (it) el.textContent = 'il y a ' + ago(Date.now() - it._t);
+  });
+}
+
+/* ------------------------------------------------------------------ son */
+let actx;
+function ding() {
+  if (!soundOn) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    [0, .18].forEach((d, k) => {
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + d;
+      o.type = 'sine'; o.frequency.value = k ? 1046 : 784;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(.14, t + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, t + .5);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + .55);
+    });
+  } catch {}
+}
+
+/* ------------------------------------------------------------------ boucles */
+async function refresh() {
+  try {
+    const d = await load();
+    const same = !!DATA && d.generatedAt === DATA.generatedAt;
+    const n = ingest(d);
+    if (n > 0) { page = 0; ding(); flash(`${n} nouvelle${n > 1 ? 's' : ''} annonce${n > 1 ? 's' : ''}`); }
+    // redessiner la grille seulement si le contenu a bougé : sans cela l'écran
+    // rejouerait l'animation des cartes toutes les minutes.
+    if (same && !n) renderMeta(); else render();
+    $('#emptysub').textContent = 'Aucune annonce datée pour l’instant.';
+  } catch (e) {
+    $('#emptysub').textContent = 'Lecture impossible : ' + (e.message || e);
+  } finally {
+    nextAt = Date.now() + CFG.refreshMs;
+    renderClock();
+  }
+}
+
+let flashT;
+function flash(txt) {
+  const el = $('#msg');
+  el.textContent = '● ' + txt;
+  el.style.color = 'var(--rose)';
+  clearTimeout(flashT);
+  flashT = setTimeout(() => { el.textContent = ''; }, 90 * 1000);
+}
+
+function turnPage() {
+  const pages = Math.max(1, Math.ceil(feedSize() / cap));
+  if (pages < 2) return;
+  page = (page + 1) % pages;
+  render();
+}
+
+/* ------------------------------------------------------------------ contrôles */
+$('#sound').textContent = soundOn ? '🔔' : '🔕';
+$('#sound').classList.toggle('on', soundOn);
+$('#sound').onclick = () => {
+  soundOn = !soundOn; store.set('mur-sound', soundOn);
+  $('#sound').textContent = soundOn ? '🔔' : '🔕';
+  $('#sound').classList.toggle('on', soundOn);
+  if (soundOn) ding();
+};
+$('#theme').onclick = () => {
+  const cur = document.documentElement.dataset.theme
+    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next; store.set('mur-theme', next);
+};
+const savedTheme = store.get('mur-theme', null);
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+$('#full').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+};
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === 'f') $('#full').click();
+  else if (k === 'r') refresh();
+  else if (k === 's') $('#sound').click();
+  else if (k === 't') $('#theme').click();
+  else if (k === 'arrowright' || k === ' ') { e.preventDefault(); turnPage(); }
+  else if (k === 'arrowleft') {
+    const pages = Math.max(1, Math.ceil(feedSize() / cap));
+    page = (page - 1 + pages) % pages; render();
+  }
+});
+// le curseur est masqué pour un écran mural, et réapparaît si on bouge la souris
+let curT = setTimeout(() => document.body.classList.add('idle'), 5000);
+addEventListener('mousemove', () => {
+  document.body.classList.remove('idle');
+  clearTimeout(curT);
+  curT = setTimeout(() => document.body.classList.add('idle'), 5000);
+});
+addEventListener('resize', render);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+
+/* ------------------------------------------------------------------ démarrage */
+render();
+refresh();
+setInterval(refresh, CFG.refreshMs);
+setInterval(turnPage, CFG.pageMs);
+setInterval(renderClock, 500);
+</script>
+</body>
+</html>
