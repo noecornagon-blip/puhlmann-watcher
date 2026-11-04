@@ -92,6 +92,13 @@ main{
   margin-left:auto;font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
   padding:.22rem .5rem;border-radius:.4rem;background:var(--rose);color:#fff;white-space:nowrap;
 }
+.drop{
+  margin-left:auto;font-size:.78rem;font-weight:800;letter-spacing:.01em;
+  padding:.22rem .55rem;border-radius:.4rem;background:var(--ok);color:#06240f;white-space:nowrap;
+}
+.card.baisse{border-color:var(--ok)}
+.card.baisse .shot::after{content:"";position:absolute;inset:0;background:var(--ok);opacity:.18;animation:flash 1.6s 3 both}
+.price s{font-size:.78rem;font-weight:600;color:var(--mute);margin-right:.35rem;text-decoration-thickness:.08em}
 .body{flex:none;padding:.65rem .8rem .7rem;display:flex;flex-direction:column;gap:.3rem}
 .title{
   font-size:1rem;font-weight:700;line-height:1.25;letter-spacing:-.01em;
@@ -153,6 +160,7 @@ footer{
   <div class="chips">
     <span class="chip hot" id="c24">24 h <b>–</b></span>
     <span class="chip" id="c7j">7 j <b>–</b></span>
+    <span class="chip" id="cbaisse">baisses <b>–</b></span>
     <span class="chip" id="ctot">au total <b>–</b></span>
   </div>
 
@@ -262,11 +270,13 @@ function ingest(d) {
   DATA = d;
   const fresh = [];
   for (const it of d.items) {
-    const raw = it.firstSeen || it.added;
-    if (!raw) continue;                       // annonces présentes dès l'origine : pas une nouveauté
-    const t = +new Date(raw);
-    if (!t || t > Date.now() + 36e5) continue; // date absente ou aberrante
-    fresh.push({ ...it, _t: t });
+    const arrivee = +new Date(it.firstSeen || it.added || 0) || 0;
+    // une baisse de prix est un événement au même titre qu'une arrivée : une pièce
+    // déjà repérée qui perd 20 % mérite l'écran autant qu'une annonce neuve.
+    const baisse = it.priceDrop > 0 ? (+new Date(it.priceChangedAt || 0) || 0) : 0;
+    const t = Math.max(arrivee, baisse);
+    if (!t || t > Date.now() + 36e5) continue; // ni date d'arrivée ni baisse datée, ou date aberrante
+    fresh.push({ ...it, _t: t, _baisse: baisse > 0 && baisse >= arrivee });
   }
   fresh.sort((a, b) => b._t - a._t);
   feed = fresh;
@@ -303,14 +313,18 @@ function card(it) {
     ? `<img src="${esc(it.photos[0])}" alt="" loading="lazy" referrerpolicy="no-referrer"
           onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph',textContent:'${GROUP_ICON[it.group] || '📦'}'}))">`
     : `<div class="ph">${GROUP_ICON[it.group] || '📦'}</div>`;
+  const ancien = it._baisse && it.priceHighEUR ? `<s>${eur.format(it.priceHighEUR)}</s>` : '';
   const price = it.priceEUR == null
     ? `<span class="price ask">Prix sur demande</span>`
-    : `<span class="price">${eur.format(it.priceEUR)}${it.currency === 'USD' ? ' <small>converti</small>' : ' <small>HT</small>'}</span>`;
-  return `<a class="card${justKeys.has(it.key) ? ' just' : ''}" href="${esc(it.url)}" target="_blank" rel="noreferrer">
+    : `<span class="price">${ancien}${eur.format(it.priceEUR)}${it.currency === 'USD' ? ' <small>converti</small>' : ' <small>HT</small>'}</span>`;
+  const etiquette = it._baisse
+    ? `<span class="drop">− ${it.priceDrop} %</span>`
+    : (dt < CFG.freshMs ? '<span class="new">nouveau</span>' : '');
+  return `<a class="card${justKeys.has(it.key) ? ' just' : ''}${it._baisse ? ' baisse' : ''}" href="${esc(it.url)}" target="_blank" rel="noreferrer">
     <div class="shot">${shot}
       <div class="tags">
         <span class="site" style="background:${col}">${esc(it.siteName || it.site)}</span>
-        ${dt < CFG.freshMs ? '<span class="new">nouveau</span>' : ''}
+        ${etiquette}
       </div>
     </div>
     <div class="body">
@@ -341,6 +355,9 @@ function renderMeta() {
   const n7 = feed.filter((i) => Date.now() - i._t < 7 * 864e5).length;
   $('#c24').innerHTML = `24 h <b>${n24}</b>`;
   $('#c7j').innerHTML = `7 j <b>${n7}</b>`;
+  const nb = feed.filter((i) => i._baisse).length;
+  $('#cbaisse').innerHTML = `baisses <b>${nb}</b>`;
+  $('#cbaisse').classList.toggle('hot', nb > 0);
   $('#ctot').innerHTML = `au total <b>${(DATA?.items.length || 0).toLocaleString('fr-FR')}</b>`;
   $('#c24').classList.toggle('hot', n24 > 0);
   const n = feedSize();

@@ -53,6 +53,33 @@ if (arg('--cached')) {
     if (!(it.key in state.firstSeen)) state.firstSeen[it.key] = first ? null : now;
     it.firstSeen = state.firstSeen[it.key];
   }
+
+  // ---- suivi des prix ----
+  // On compare dans la DEVISE D'ORIGINE. Comparer des euros ferait apparaître de
+  // fausses baisses au gré du taux : une annonce en dollars « baisserait » chaque
+  // fois que l'euro monte, alors que le vendeur n'a rien changé.
+  // Par clé : c = prix courant, h = plus haut constaté, u = devise,
+  //           d = date du dernier changement, v = jour de la dernière vue.
+  state.prices ||= {};
+  const jour = Math.floor(Date.now() / 864e5);
+  for (const r of results) for (const it of r.items) {
+    if (it.priceNum == null) continue;            // « prix sur demande » : rien à suivre
+    const p = state.prices[it.key];
+    if (!p || p.u !== it.currency) {
+      // annonce inconnue, ou devise changée : on repart d'une référence neuve
+      state.prices[it.key] = { c: it.priceNum, h: it.priceNum, u: it.currency, d: null, v: jour };
+    } else {
+      if (it.priceNum !== p.c) { p.c = it.priceNum; p.h = Math.max(p.h, it.priceNum); p.d = now; }
+      p.v = jour;
+    }
+    const q = state.prices[it.key];
+    it.priceHigh = q.h > q.c ? q.h : null;        // prix barré à afficher, dans la devise de l'annonce
+    it.priceDrop = q.h > q.c ? Math.round((1 - q.c / q.h) * 100) : 0;
+    it.priceChangedAt = q.d;
+  }
+  // purge des annonces disparues depuis plus de 60 jours, pour borner le fichier d'état
+  for (const k of Object.keys(state.prices)) if (jour - (state.prices[k].v || 0) > 60) delete state.prices[k];
+
   await writeFile(here('dashboard-state.json'), JSON.stringify(state));
   data = { generatedAt: now, sources: results.map(({ id, name, ok, stale, error, items }) => ({ id, name, ok, stale, error, count: items.length })), items: results.flatMap((r) => r.items) };
 }
@@ -88,10 +115,14 @@ const groupOf = (it) => {
   for (const [g, re] of TITLE_RULES) if (re.test(t)) return g;
   return 'other';
 };
+const enEuros = (n, cur) => n == null ? null : Math.round(cur === 'USD' ? n * rate.rate : n);
 for (const it of data.items) {
-  it.priceEUR = it.priceNum == null ? null : Math.round(it.currency === 'USD' ? it.priceNum * rate.rate : it.priceNum);
+  it.priceEUR = enEuros(it.priceNum, it.currency);
+  it.priceHighEUR = enEuros(it.priceHigh, it.currency);
   it.group = groupOf(it);
 }
+const baisses = data.items.filter((it) => it.priceDrop > 0);
+if (baisses.length) console.log(`${baisses.length} baisse(s) de prix en cours`);
 
 // ---- écriture : data.json (enrichi, relu par la page toutes les 5 min) + page autonome ----
 const template = await readFile(here('ui/template.html'), 'utf8').catch(() => readFile(here('template.html'), 'utf8'));
