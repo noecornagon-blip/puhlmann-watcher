@@ -257,8 +257,8 @@ body.idle .mk{opacity:0!important}
   <div class="ft">
     <span class="msg" id="mkMsg"></span>
     <a class="lnk" href="https://trouvetonmatos-studio.vercel.app/studio/" target="_blank" rel="noopener">Ouvrir le Studio complet ↗</a>
-    <button class="go alt" id="mkShare" hidden>Partager</button>
-    <button class="go" id="mkGo">Télécharger les PNG</button>
+    <button class="go alt" id="mkShare" hidden disabled>Partager</button>
+    <button class="go" id="mkGo" disabled>Télécharger le ZIP</button>
   </div>
 </dialog>
 <script>
@@ -633,7 +633,7 @@ function drawPreview() {
       text: { title: f.title.value, price: sale == null ? '' : String(sale), tax: 'HT' } });
   }
   const n = selectedPhotos().length * ((f.story.checked ? 1 : 0) + (f.post.checked ? 1 : 0));
-  $('#mkGo').textContent = n ? `Télécharger ${n} PNG` : 'Télécharger les PNG';
+  $('#mkGo').textContent = n ? `Télécharger le ZIP (${n} PNG)` : 'Télécharger le ZIP';
   $('#mkGo').disabled = !n || sale == null || MK.busy;
   $('#mkShare').disabled = $('#mkGo').disabled;
 }
@@ -707,18 +707,47 @@ $('#mkForm').addEventListener('submit', (e) => e.preventDefault());
 $('#mkClose').onclick = () => $('#mkdlg').close();
 $('#mkdlg').addEventListener('close', () => { MK.item = null; });
 
+/* ZIP sans compression (les PNG sont déjà compressés) — aucune dépendance */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = [], d = new Date();
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  let off = 0;
+  for (const f of files) {
+    const data = new Uint8Array(await f.arrayBuffer()), name = enc.encode(f.name), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, time, true); h.setUint16(12, date, true); h.setUint32(14, crc, true);
+    h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, time, true); c.setUint16(14, date, true); c.setUint32(16, crc, true);
+    c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true);
+    c.setUint32(42, off, true);
+    parts.push(h, name, data); central.push(c, name);
+    off += 30 + name.length + data.length;
+  }
+  const size = central.reduce((s, x) => s + x.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, size, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, e], { type: 'application/zip' });
+}
+
 async function exportPngs(share) {
   MK.busy = true; drawPreview(); $('#mkMsg').textContent = 'Création des images…';
   try {
     const files = await renderAll();
     if (share) { await navigator.share({ files, title: $('#mkForm').title.value }); }
-    else for (const file of files) {
-      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name;
+    else {
+      const zip = await makeZip(files), name = `${slug($('#mkForm').title.value)}.zip`;
+      const a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      await new Promise((ok) => setTimeout(ok, 350));   // laisse le navigateur enchaîner les téléchargements
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      $('#mkMsg').textContent = `✔ ${name} téléchargé : ${files.length} PNG (${$('#mkForm').scale.value === '2' ? '2160' : '1080'} px de large).`;
     }
-    $('#mkMsg').textContent = share ? 'Partagé.' : `✔ ${files.length} PNG téléchargé(s) (${$('#mkForm').scale.value === '2' ? '2160' : '1080'} px de large).`;
+    if (share) $('#mkMsg').textContent = 'Partagé.';
   } catch (e) {
     $('#mkMsg').textContent = e.name === 'AbortError' ? 'Partage annulé.' : `Échec : ${e.message}`;
   } finally { MK.busy = false; drawPreview(); }
