@@ -156,7 +156,7 @@ body.idle .mk{opacity:0!important}
 #mkdlg .hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);font-weight:800}
 #mkdlg .hd .x{margin-left:auto;border:0;background:none;color:var(--mute);font-size:20px;cursor:pointer}
 #mkdlg[open]{display:flex;flex-direction:column}
-#mkdlg .bd{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;padding:16px 18px;overflow:auto;flex:1;min-height:0}
+#mkdlg .bd{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;padding:16px 18px;overflow:auto;flex:1 1 auto;min-height:0;max-height:calc(94vh - 130px)}
 #mkdlg .hd,#mkdlg .ft{flex:none}
 #mkdlg .pv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
 #mkdlg .pv canvas{border-radius:12px;background:#000;width:100%;height:auto;display:block}
