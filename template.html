@@ -65,6 +65,9 @@ main{padding-top:24px;padding-bottom:70px}
 .arr.l{left:10px}.arr.r{right:10px}
 .pic:hover .arr{opacity:1}
 @media(hover:none){.arr{opacity:.9}}
+.mkb{position:absolute;right:10px;bottom:10px;z-index:3;border:0;border-radius:999px;padding:6px 11px;background:#000b;color:#fff;font-size:12px;font-weight:700;opacity:0;transition:opacity .2s;backdrop-filter:blur(4px)}
+.pic:hover .mkb,.mkb:focus-visible{opacity:1}
+@media (hover:none){.mkb{opacity:.95}}
 .dots{position:absolute;bottom:10px;left:0;right:0;display:flex;justify-content:center;gap:4px;z-index:2}
 .dots i{width:6px;height:6px;border-radius:50%;background:#ffffff99}
 .dots i.on{background:#fff;transform:scale(1.2)}
@@ -203,6 +206,7 @@ dialog::backdrop{background:#0008}
 <dialog id="nd"></dialog>
 <dialog id="vw"><button class="x" onclick="vw.close()">✕</button><div class="stage"><button class="arr l" id="vP">‹</button><img id="vI" alt=""><button class="arr r" id="vN">›</button><div class="cap" id="vC"></div></div></dialog>
 
+<script src="maker.js"></script>
 <script>
 let DATA = /*__DATA__*/null;
 const $ = (s) => document.querySelector(s);
@@ -287,6 +291,7 @@ function card(it, i) {
       ${n ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(it.photos[0])}" alt="">` : '<div class="none">Pas de photo</div>'}
       ${it._new ? '<span class="tag">Nouveau</span>' : ''}
       <button class="heart ${favs.has(it.key) ? 'on' : ''}" data-act="fav" aria-label="Favori">${HEART}</button>
+      ${n ? '<button class="mkb" data-act="mk" title="Créer la story et le post pour Instagram">📸 Story / post</button>' : ''}
       ${n > 1 ? `<button class="arr l" data-act="prev">‹</button><button class="arr r" data-act="next">›</button><div class="dots">${Array.from({ length: Math.min(n, 5) }, (_, k) => `<i class="${k ? '' : 'on'}"></i>`).join('')}</div>` : ''}
     </div>
     <div class="txt">
@@ -320,6 +325,7 @@ $('#grid').addEventListener('click', (e) => {
   if (act === 'prev') return step(c, -1);
   if (act === 'next') return step(c, 1);
   if (act === 'fav') { toggleFav(it.key); if (S.favOnly) apply(); return; }
+  if (act === 'mk') return window.TTMMaker?.open(it);
   openListing(it);
 });
 
@@ -330,7 +336,7 @@ function openListing(it) {
   const price = it.priceEUR != null ? eur(it.priceEUR) : 'Prix sur demande';
   const extra = it.priceEUR != null && it.currency === 'USD' ? `<small>(${esc(it.price)})</small>` : /HT/.test(it.price || '') ? '<small>HT</small>' : '';
   $('#ld').innerHTML = `<div class="mh" style="border:0"><button class="x" onclick="ld.close()" aria-label="Fermer">✕</button><span style="font-size:14px;font-weight:600;color:var(--mute)">${esc(it.siteName)}</span></div>
-    <div class="lbtop"><div></div><div class="acts"><button class="ghost" data-do="notif">🔔 Aperçu notification</button><button class="ghost" data-do="fav">${favs.has(it.key) ? '♥ Enregistré' : '♡ Enregistrer'}</button></div></div>
+    <div class="lbtop"><div></div><div class="acts">${it.photos.length ? '<button class="ghost" data-do="mk">📸 Story / post</button>' : ''}<button class="ghost" data-do="notif">🔔 Aperçu notification</button><button class="ghost" data-do="fav">${favs.has(it.key) ? '♥ Enregistré' : '♡ Enregistrer'}</button></div></div>
     ${gal}
     <div class="lb"><div><h1>${esc(it.title)}</h1><div class="sub">${esc(it.siteName)}${it.category ? ' · ' + esc(it.category) : ''}${it._new ? ' · Nouveau' : ''}</div><hr>
       ${it.description ? `<div class="desc">${esc(it.description)}</div>` : '<div class="sub">Pas de description.</div>'}
@@ -347,6 +353,7 @@ $('#ld').addEventListener('click', (e) => {
   const b = e.target.closest('[data-do]'); if (!b) return;
   if (b.dataset.do === 'fav') { toggleFav(it.key); b.textContent = favs.has(it.key) ? '♥ Enregistré' : '♡ Enregistrer'; if (S.favOnly) apply(); }
   if (b.dataset.do === 'notif') showNotif(it);
+  if (b.dataset.do === 'mk') window.TTMMaker?.open(it);
 });
 
 /* ---------- aperçu notification ---------- */
