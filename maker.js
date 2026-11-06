@@ -48,10 +48,17 @@
 #mkdlg .mk-sale small{color:var(--mk-mute);font-size:12px}
 #mkdlg .mk-ft{display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--mk-line);flex-wrap:wrap;flex:none}
 #mkdlg .mk-msg{color:var(--mk-mute);font-size:13px;margin-right:auto}
-#mkdlg .mk-go{border:0;border-radius:12px;padding:11px 18px;font:700 15px/1.2 inherit;cursor:pointer;background:var(--mk-rose);color:#fff}
+#mkdlg .mk-go{border:0;border-radius:12px;padding:11px 18px;font-family:inherit;font-weight:700;font-size:15px;line-height:1.2;cursor:pointer;background:var(--mk-rose);color:#fff}
 #mkdlg .mk-go.alt{background:var(--mk-surf2);color:var(--mk-ink);border:1px solid var(--mk-line)}
 #mkdlg .mk-go:disabled{opacity:.5;cursor:default}
 #mkdlg .mk-lnk{color:var(--mk-mute);font-size:13px}
+#mkdlg textarea{background:var(--mk-surf2);border:1px solid var(--mk-line);border-radius:10px;color:var(--mk-ink);
+  font-family:inherit;font-size:14px;line-height:1.45;padding:10px 11px;width:100%;min-width:0;resize:vertical;min-height:190px}
+#mkdlg textarea:focus{outline:0;border-color:var(--mk-rose)}
+#mkdlg .mk-cap{border-top:1px solid var(--mk-line);padding-top:12px}
+#mkdlg .mk-caprow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#mkdlg .mk-caprow select{width:auto;flex:1;min-width:120px}
+#mkdlg .mk-sm{padding:8px 13px;font-size:13px;border-radius:10px}
 @media (max-width:800px){#mkdlg .mk-bd{grid-template-columns:1fr}#mkdlg .mk-lnk{display:none}#mkdlg .mk-msg{flex-basis:100%}#mkdlg .mk-go{flex:1}}`;
 
   const html = `
@@ -76,6 +83,14 @@
         <label class="mk-f">Cadrage<select name="mode"><option value="cover">Remplir le cadre</option><option value="contain">Photo entière</option></select></label>
       </div>
       <label class="mk-f">Zoom <input type="range" name="zoom" min="1" max="2.5" step="0.05" value="1"></label>
+      <div class="mk-f mk-cap"><span>Description Instagram</span>
+        <textarea id="mkCap" rows="10" spellcheck="true" aria-label="Description Instagram"></textarea>
+        <div class="mk-caprow">
+          <select name="capStyle" aria-label="Style de description"><option value="full">Complète (avec le contenu du lot)</option><option value="short">Courte</option></select>
+          <button type="button" class="mk-go alt mk-sm" id="mkCapNew" title="Proposer une autre accroche">↻ Autre accroche</button>
+          <button type="button" class="mk-go mk-sm" id="mkCapCopy">Copier</button>
+        </div>
+      </div>
     </form>
   </div>
   <div class="mk-ft">
@@ -95,7 +110,7 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
-  const MK = { engine: null, item: null, photos: [], busy: false, preview: null };
+  const MK = { engine: null, item: null, photos: [], busy: false, preview: null, capVariant: 0, capDirty: false };
 
   /* ---------- moteur du Studio ---------- */
   const loadScript = (src) => new Promise((ok, ko) => {
@@ -137,6 +152,72 @@
     else if (buy != null && m != null) f.sale.value = r2(buy + m);   // marge ou prix d'achat modifiés
   }
   const selectedPhotos = () => MK.photos.filter((p) => p.ok && p.checked);
+
+  /* ---------- description Instagram (générée dans la page, sans service externe) ----------
+     Ne mentionne jamais le vendeur d'origine ni le prix d'achat : seulement l'article et le prix final. */
+  const HOOKS = {
+    cameras: ['Une caméra prête pour votre prochain tournage.', 'Le corps caméra qu’il vous faut pour passer au niveau supérieur.', 'Prête à tourner, contrôlée, disponible tout de suite.'],
+    lenses: ['Une série d’optiques prête à tourner.', 'Du verre de cinéma pour donner du caractère à vos images.', 'Des optiques cinéma, contrôlées et prêtes à partir.'],
+    monitors: ['Un retour image fiable pour le plateau.', 'Gardez l’œil sur chaque plan.', 'Le moniteur qu’il manque à votre configuration.'],
+    lights: ['De la lumière pour sculpter vos plans.', 'Un éclairage pro, prêt pour le plateau.', 'Éclairez vos tournages comme il se doit.'],
+    support: ['Machinerie et supports pour des mouvements maîtrisés.', 'De la stabilité pour vos plans.', 'Le support qu’il faut pour tourner sereinement.'],
+    audio: ['Un son propre pour vos tournages.', 'L’audio pro, prêt pour le plateau.', 'Pour un son à la hauteur de vos images.'],
+    accessories: ['L’accessoire qui complète votre configuration.', 'Le petit plus qui change tout sur le plateau.', 'Complétez votre kit de tournage.'],
+    other: ['Du matériel cinéma pro, prêt à tourner.', 'Une belle pièce pour votre parc matériel.', 'Disponible dès maintenant.'],
+  };
+  const GROUP_TAGS = {
+    cameras: ['#camera', '#cinemacamera'], lenses: ['#cinelens', '#objectif', '#cinemalenses'], monitors: ['#moniteur', '#monitoring'],
+    lights: ['#eclairage', '#lighting'], support: ['#machinerie', '#grip'], audio: ['#audio', '#prisedeson'], accessories: ['#accessoires', '#cameragear'], other: ['#cameragear'],
+  };
+  const BRANDS = ['ARRI', 'RED', 'Sony', 'Canon', 'Blackmagic', 'Panasonic', 'Kinefinity', 'Z CAM', 'Cooke', 'Zeiss', 'Leica', 'Angenieux', 'Angénieux', 'Sigma', 'Fujinon', 'Tokina', 'Laowa', 'DZOFilm', 'Atlas', 'Vazen', 'Sirui', 'Panavision', 'Hawk', 'Kowa', 'Schneider', 'Xeen', 'Samyang', 'Rokinon', 'IronGlass', 'P+S Technik', 'Ultra Prime', 'Master Prime', 'Supreme', 'Tilta', 'Wooden Camera', 'Bright Tangerine', 'SmallHD', 'Atomos', 'Teradek', 'Aputure', 'Nanlite', 'Astera', 'Kino Flo', 'Litepanels', 'Creamsource', 'Sachtler', 'OConnor', "O'Connor", 'Ronin', 'DJI', 'Easyrig', 'Movi', 'Freefly', 'Sennheiser', 'Sound Devices', 'Rode'];
+  const tagOf = (b) => '#' + b.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const eurTxt = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(n).replace(/[  ]/g, ' ') + ' € HT';
+  function lotLines(it) {
+    const title = (it.title || '').trim().toLowerCase(), out = [];
+    for (let l of String(it.description || '').split(/\n+/)) {
+      l = l.replace(/ /g, ' ').trim();
+      if (!l || l.toLowerCase() === title || /^(includes?|including|inklusive|contents?|lieferumfang|set includes?)\s*:?$/i.test(l)) continue;
+      if (/https?:|www\.|€|\$|£|price|preis|prix|shipping|versand|vat|mwst|warranty|garantie|contact|e-?mail|phone|tel\.|call us|order|bestell/i.test(l)) continue;
+      if (/on behalf|client|customer|available|se(p|pe)arately|condition|\bused\b|\bsold\b|\bnote\b|^\*|please|ask us|on request|auf anfrage/i.test(l)) continue;   // remarques du vendeur
+      l = l.replace(/^[-•*·–]\s*/, '');
+      const q = l.match(/^(\d+)\s*x\s*/i); if (q) l = l.slice(q[0].length);
+      l = l.replace(/^(K\d[.\w-]*|[A-Z]{1,3}\d[\w.-]{3,})\s+/, '');                    // référence fabricant
+      l = ((q ? q[1] + ' × ' : '') + l).trim();
+      if (l.length < 3) continue;
+      const words = l.toLowerCase().match(/[a-z0-9]+/g) || [];
+      if (words.length && words.every((w) => title.includes(w))) continue;   // simple rappel du titre
+      out.push(l.length > 70 ? l.slice(0, 68).trimEnd() + '…' : l);
+    }
+    return out;
+  }
+  function caption() {
+    const it = MK.item; if (!it) return '';
+    const f = $('#mkForm'), sale = salePrice(), title = f.title.value.trim() || it.title || '';
+    const g = HOOKS[it.group] ? it.group : 'other', hooks = HOOKS[g];
+    const hook = hooks[MK.capVariant % hooks.length];
+    const hay = (title + ' ' + (it.category || '')).toLowerCase();
+    const brands = BRANDS.filter((b) => new RegExp('(^|[^a-z0-9])' + b.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(hay));
+    const tags = [...new Set([...brands.map(tagOf), ...GROUP_TAGS[g], '#trouvetonmatos', '#materielcinema', '#cinema', '#filmmaking', '#tournage', '#occasion'])].slice(0, 14);
+    const price = sale != null ? `💰 ${eurTxt(sale)}` : '💰 Prix sur demande';
+    const cta = '📩 Intéressé·e ? Écrivez-nous en DM ou rendez-vous sur trouvetonmatos.fr';
+    if (f.capStyle.value === 'short') return [`🎬 ${title}`, hook, '', price, cta, '', tags.join(' ')].join('\n');
+    const lines = lotLines(it), shown = lines.slice(0, 8);
+    const lot = shown.length ? ['', '📦 Le lot comprend :', ...shown.map((l) => '• ' + l), ...(lines.length > shown.length ? ['• … et plus encore (détails en DM)'] : [])] : [];
+    return [`🎬 ${title}`, '', hook, ...lot, '', price, cta, '', tags.join(' ')].join('\n');
+  }
+  function updateCaption(force) {
+    if (MK.capDirty && !force) return;
+    if (force) MK.capDirty = false;
+    $('#mkCap').value = caption();
+  }
+  async function copyCaption() {
+    const t = $('#mkCap').value;
+    try { await navigator.clipboard.writeText(t); return true; }
+    catch {
+      const ta = $('#mkCap'); ta.focus(); ta.select();
+      try { return document.execCommand('copy'); } catch { return false; }
+    }
+  }
 
   /* ---------- aperçu ---------- */
   function drawPreview() {
@@ -212,6 +293,7 @@
     f.buy.value = it.priceEUR != null ? Math.round(it.priceEUR) : '';
     f.margin.value = saved.margin; f.scale.value = saved.scale; f.mode.value = saved.mode;
     f.zoom.value = 1; f.sale.value = ''; linkPrices('margin');
+    MK.capVariant = 0; updateCaption(true);
     $('#mkSrc').textContent = `${it.siteName || it.site || ''}${it.currency === 'USD' ? ' · prix converti en €' : ''}`;
     $('#mkMsg').textContent = 'Chargement du Studio et des photos…';
     $('#mkPhotos').innerHTML = '';
@@ -236,18 +318,20 @@
 
   /* ---------- export ---------- */
   async function exportPngs(share) {
+    const copied = share ? copyCaption() : null;   // pendant le clic : le presse-papiers l'exige
     MK.busy = true; drawPreview(); $('#mkMsg').textContent = 'Création des images…';
     try {
       const files = await renderAll();
+      const cap = $('#mkCap').value.trim();
       if (share) {
         await navigator.share({ files, title: $('#mkForm').title.value });
-        $('#mkMsg').textContent = 'Partagé.';
+        $('#mkMsg').textContent = (await copied) ? 'Partagé. La description est copiée : collez-la dans Instagram.' : 'Partagé.';
       } else {
-        const zip = await makeZip(files), name = `${slug($('#mkForm').title.value)}.zip`;
+        const zip = await makeZip(cap ? [...files, new File([cap + '\n'], 'description.txt', { type: 'text/plain' })] : files), name = `${slug($('#mkForm').title.value)}.zip`;
         const a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = name;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-        $('#mkMsg').textContent = `✔ ${name} téléchargé : ${files.length} PNG (${$('#mkForm').scale.value === '2' ? '2160' : '1080'} px de large).`;
+        $('#mkMsg').textContent = `✔ ${name} téléchargé : ${files.length} PNG (${$('#mkForm').scale.value === '2' ? '2160' : '1080'} px de large)${cap ? ' + description.txt' : ''}.`;
       }
     } catch (e) {
       $('#mkMsg').textContent = e.name === 'AbortError' ? 'Partage annulé.' : `Échec : ${e.message}`;
@@ -261,7 +345,10 @@
     MK.preview = e.target.checked ? Number(l.dataset.i) : null; drawPreview();
   });
   $('#mkForm').addEventListener('input', (e) => {
+    if (e.target.id === 'mkCap') { MK.capDirty = true; return; }   // texte retouché à la main : on n'y touche plus
     if (['buy', 'margin', 'sale'].includes(e.target.name)) linkPrices(e.target.name);
+    if (['title', 'buy', 'margin', 'sale'].includes(e.target.name)) updateCaption();
+    if (e.target.name === 'capStyle') { updateCaption(true); return; }
     const f = $('#mkForm');
     store.set(PREFS, { margin: num(f.margin.value) ?? 0, scale: Number(f.scale.value), mode: f.mode.value });
     drawPreview();
@@ -270,6 +357,12 @@
   $('#mkClose').onclick = () => dlg.close();
   dlg.addEventListener('close', () => { MK.item = null; });
   dlg.addEventListener('keydown', (e) => e.stopPropagation());   // les raccourcis de la page ne réagissent pas pendant la saisie
+  $('#mkCapNew').onclick = () => { MK.capVariant++; updateCaption(true); };
+  $('#mkCapCopy').onclick = async () => {
+    const ok = await copyCaption();
+    $('#mkCapCopy').textContent = ok ? '✔ Copiée' : 'Copie impossible';
+    setTimeout(() => { $('#mkCapCopy').textContent = 'Copier'; }, 1800);
+  };
   $('#mkGo').onclick = () => exportPngs(false);
   $('#mkShare').onclick = () => exportPngs(true);
 
