@@ -5,12 +5,19 @@
    relais d'images public wsrv.nl, faute de quoi le navigateur interdirait l'export PNG.
 
    Utilisation : <script src="maker.js"></script> en fin de <body>, puis TTMMaker.open(annonce).
+   Envoi vers le site : TTMSite.send([annonce | {k, p?, ph?}, …]) ouvre l'admin de trouvetonmatos.fr
+   (onglet « Importer ») avec ces annonces PRÉ-SÉLECTIONNÉES ; rien n'est créé ni publié sans clic dans l'admin.
    Toutes les classes sont préfixées « mk- » pour ne pas hériter des styles de la page hôte ;
    les couleurs reprennent les variables de la page (--surf, --ink, --rose…) quand elles existent. */
 (() => {
   'use strict';
   const STUDIO = 'https://trouvetonmatos-studio.vercel.app/studio/';
   const PREFS = 'mur-marge-eur';
+  // Admin du site : lien profond « #import=<base64url(JSON)> », JSON = [{k: clé de l'annonce, p?: prix de vente HT en €,
+  // ph?: index des photos retenues dans annonce.photos}]. L'admin relit lui-même data.json pour le reste.
+  const ADMIN_URL = 'https://trouvetonmatos.fr/admin-ttm';
+  const ADMIN_TAB = 'ttm-admin';      // onglet nommé : réutilisé d'un envoi à l'autre
+  const MAX_IMPORT = 200;
 
   const css = `
 #mkdlg{--mk-surf:var(--surf,#fff);--mk-surf2:var(--surf2,var(--soft,#f4f4f4));--mk-line:var(--line,#ddd);
@@ -99,6 +106,7 @@
   <div class="mk-ft">
     <span class="mk-msg" id="mkMsg"></span>
     <a class="mk-lnk" href="${STUDIO}" target="_blank" rel="noopener">Ouvrir le Studio complet ↗</a>
+    <button type="button" class="mk-go alt" id="mkSite" disabled title="Ouvre l'admin du site, onglet Importer, avec cette annonce, ce prix et ces photos pré-sélectionnés (rien n'est créé sans votre validation)">➕ Brouillon sur le site</button>
     <button type="button" class="mk-go alt" id="mkShare" hidden disabled>Partager</button>
     <button type="button" class="mk-go" id="mkGo" disabled>Télécharger le ZIP</button>
   </div>`;
@@ -338,6 +346,63 @@
     return new Blob([...parts, ...central, e], { type: 'application/zip' });
   }
 
+  /* ---------- envoi vers l'admin du site (pré-sélection seulement) ---------- */
+  function adminBase() {
+    // surcharge possible pour tester un déploiement de prévisualisation : localStorage « ttm-admin-url »
+    const o = store.get('ttm-admin-url', null);
+    if (typeof o === 'string' && /^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)(\/[^#\s]*)?$/i.test(o)) return o;
+    return ADMIN_URL;
+  }
+  const b64url = (str) => {
+    let bin = ''; for (const b of new TextEncoder().encode(str)) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+  // accepte des annonces de data.json ou des entrées {k, p?, ph?} ; dédoublonne et borne la liste
+  function entries(list) {
+    const out = [], seen = new Set();
+    for (const x of list || []) {
+      const k = typeof x === 'string' ? x : (x?.k ?? x?.key);
+      if (typeof k !== 'string' || !k || seen.has(k)) continue;
+      seen.add(k);
+      const e = { k };
+      const p = Number(x?.p);
+      if (x?.p != null && x.p !== '' && isFinite(p) && p > 0) e.p = Math.round(p * 100) / 100;
+      if (Array.isArray(x?.ph)) {
+        const ph = [...new Set(x.ph.map(Number).filter((i) => Number.isInteger(i) && i >= 0 && i < 100))];
+        if (ph.length) e.ph = ph;
+      }
+      out.push(e);
+    }
+    return out;
+  }
+  function importLink(list) {
+    const e = entries(list).slice(0, MAX_IMPORT);
+    return { url: `${adminBase()}#import=${b64url(JSON.stringify(e))}`, n: e.length };
+  }
+  // Ouvre (ou réutilise) l'onglet de l'admin. À appeler pendant un clic ou une touche (sinon bloqué).
+  function send(list) {
+    const all = entries(list);
+    if (!all.length) return { ok: false, n: 0, cut: 0, url: null };
+    const { url, n } = importLink(all);
+    let w = null;
+    try { w = window.open(url, ADMIN_TAB); } catch {}
+    try { if (w) w.opener = null; } catch {}   // l'admin n'a pas besoin d'accéder à cette page
+    return { ok: !!w, n, cut: all.length - n, url };
+  }
+  window.TTMSite = { send, link: (list) => importLink(list).url, max: MAX_IMPORT };
+
+  function sendCurrent() {
+    const it = MK.item; if (!it) return;
+    const src = it.photos || [], ok = MK.photos.filter((p) => p.ok);
+    const kept = ok.filter((p) => p.checked).map((p) => src.indexOf(p.url)).filter((i) => i >= 0);
+    // photos : seulement si l'utilisateur en a écarté (sinon l'admin prend toutes celles de l'annonce)
+    const ph = MK.photos.length && kept.length && kept.length < MK.photos.length ? kept : null;
+    const r = send([{ k: it.key, p: salePrice(), ph }]);
+    $('#mkMsg').textContent = r.ok
+      ? `Admin du site ouvert : annonce pré-sélectionnée${salePrice() != null ? ', prix ' + eurTxt(salePrice()) : ''}${ph ? `, ${ph.length} photo${ph.length > 1 ? 's' : ''}` : ''}. Validez dans l’onglet Importer — rien n’est créé avant.`
+      : 'Fenêtre bloquée par le navigateur : autorisez les fenêtres pour cette page, puis recommencez.';
+  }
+
   /* ---------- ouverture ---------- */
   async function open(it) {
     if (!it) return;
@@ -352,6 +417,7 @@
     $('#mkMsg').textContent = 'Chargement du Studio et des photos…';
     $('#mkPhotos').innerHTML = '';
     $('#mkGo').disabled = $('#mkShare').disabled = true;
+    $('#mkSite').disabled = !it.key;   // l'envoi vers le site ne dépend pas du moteur de rendu
     $('#mkShare').hidden = !(navigator.canShare && navigator.canShare({ files: [new File([''], 'a.png', { type: 'image/png' })] }));
     if (!dlg.open) dlg.showModal();
     try { await loadEngine(); } catch (e) { $('#mkMsg').textContent = e.message; return; }
@@ -418,6 +484,7 @@
   };
   $('#mkGo').onclick = () => exportPngs(false);
   $('#mkShare').onclick = () => exportPngs(true);
+  $('#mkSite').onclick = sendCurrent;
 
   window.TTMMaker = { open, isOpen: () => dlg.open };
 })();

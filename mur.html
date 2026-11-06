@@ -150,6 +150,7 @@ footer{
 body.idle .mk{opacity:0!important}
 @media (hover:none){.mk{opacity:.95;transform:none}}
 .mk:hover{background:var(--rose)}
+.mk.tosite{right:auto;left:.5rem}
 </style>
 </head>
 <body>
@@ -178,6 +179,7 @@ body.idle .mk{opacity:0!important}
     <span><b id="ago">connexion…</b><br><span id="gen">&nbsp;</span></span>
   </div>
 
+  <button class="iconbtn" id="toSite" title="Envoyer à l'admin du site l'annonce survolée, sinon les favoris de la Veille (I) — pré-sélection seulement">➕</button>
   <button class="iconbtn" id="sound" title="Signal sonore à chaque nouvelle annonce (S)">🔕</button>
   <button class="iconbtn" id="theme" title="Thème clair / sombre (T)">◐</button>
   <button class="iconbtn" id="full" title="Plein écran (F)">⛶</button>
@@ -326,7 +328,7 @@ function card(it) {
     : `<div class="ph">${GROUP_ICON[it.group] || '📦'}</div>`;
   const ancien = it._baisse && it.priceHighEUR ? `<s>${eur.format(it.priceHighEUR)}</s>` : '';
   const price = it.priceEUR == null
-    ? `<span class="price ask">Prix sur demande</span>`
+    ? `<span class="price ask">${it.priceNum != null ? esc(it.price) : 'Prix sur demande'}</span>`
     : `<span class="price">${ancien}${eur.format(it.priceEUR)}${it.currency === 'USD' ? ' <small>converti</small>' : ' <small>HT</small>'}</span>`;
   const etiquette = it._baisse
     ? `<span class="drop">− ${it.priceDrop} %</span>`
@@ -338,6 +340,7 @@ function card(it) {
         ${etiquette}
       </div>
       ${it.photos && it.photos.length ? `<span class="mk" role="button" tabindex="0" data-mk="${esc(it.key)}" title="Créer la story et le post pour Instagram">📸 Story / post</span>` : ''}
+      <span class="mk tosite" role="button" tabindex="0" data-site="${esc(it.key)}" title="Pré-sélectionner cette annonce dans l'admin du site (brouillon à valider)">➕ Site</span>
     </div>
     <div class="body">
       <div class="title">${esc(it.title)}</div>
@@ -490,6 +493,7 @@ addEventListener('keydown', (e) => {
   else if (k === 'r') refresh();
   else if (k === 's') $('#sound').click();
   else if (k === 't') $('#theme').click();
+  else if (k === 'i') importShortcut();
   else if (k === 'arrowright' || k === ' ') { e.preventDefault(); turnPage(); }
   else if (k === 'arrowleft') {
     const pages = Math.max(1, Math.ceil(feedSize() / cap));
@@ -514,13 +518,42 @@ function openMaker(key) {
   if (it) window.TTMMaker?.open(it);
 }
 $('#grid').addEventListener('click', (e) => {
+  const s = e.target.closest('[data-site]');
+  if (s) { e.preventDefault(); e.stopPropagation(); return sendKeys([s.dataset.site]); }
   const b = e.target.closest('[data-mk]'); if (!b) return;
   e.preventDefault(); e.stopPropagation(); openMaker(b.dataset.mk);
 });
 $('#grid').addEventListener('keydown', (e) => {
-  const b = e.target.closest('[data-mk]'); if (!b || (e.key !== 'Enter' && e.key !== ' ')) return;
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const s = e.target.closest('[data-site]');
+  if (s) { e.preventDefault(); e.stopPropagation(); return sendKeys([s.dataset.site]); }
+  const b = e.target.closest('[data-mk]'); if (!b) return;
   e.preventDefault(); openMaker(b.dataset.mk);
 });
+
+/* ------------------------------------------------------------------ envoi vers le site
+   Ouvre l'admin de trouvetonmatos.fr (onglet Importer) avec les annonces PRÉ-SÉLECTIONNÉES :
+   les brouillons ne sont créés qu'après validation dans l'admin, et restent non publiés. */
+function sendKeys(keys, gone = 0) {
+  if (!window.TTMSite) return flash('envoi vers le site indisponible (maker.js non chargé)');
+  const r = window.TTMSite.send(keys);
+  if (!r.n) return flash('aucune annonce à envoyer');
+  if (!r.ok) return flash('fenêtre bloquée par le navigateur : autorisez les fenêtres pour cette page');
+  flash(`${r.n} annonce${r.n > 1 ? 's' : ''} envoyée${r.n > 1 ? 's' : ''} à l’admin du site${r.cut ? ` (${r.cut} au-delà de la limite)` : ''}${gone ? ` · ${gone} favori${gone > 1 ? 's' : ''} disparu${gone > 1 ? 's' : ''}` : ''}`);
+}
+// touche I / bouton ➕ : l'annonce survolée par la souris, sinon les favoris de la Veille matos
+// (au clavier : Tab jusqu'au bouton « ➕ Site » d'une carte, puis Entrée)
+function importShortcut() {
+  const c = document.querySelector('#grid .card:hover');
+  const one = c?.querySelector('[data-site]')?.dataset.site;
+  if (one) return sendKeys([one]);
+  const favs = store.get('vm-favs', []);
+  const live = new Set((DATA?.items || []).map((x) => x.key));
+  const keys = (Array.isArray(favs) ? favs : []).filter((k) => live.has(k));
+  if (!keys.length) return flash('survolez une annonce, ou ajoutez des favoris (♥) dans la Veille matos');
+  sendKeys(keys, (Array.isArray(favs) ? favs.length : 0) - keys.length);
+}
+$('#toSite').onclick = importShortcut;
 
 /* ------------------------------------------------------------------ démarrage */
 render();

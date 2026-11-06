@@ -23,12 +23,13 @@ async function previous() {
   return null;
 }
 
-let data;
+let data, prevFx = null;
 if (arg('--cached')) {
   data = await read('data.json');
   if (!data) throw new Error('data.json introuvable : lancez d\'abord node dashboard.mjs');
 } else {
   const prev = await previous();
+  prevFx = prev?.fx || (prev?.usdEur ? { date: prev.usdEur.date, toEUR: { USD: prev.usdEur.rate } } : null);
   const prevBySite = {};
   for (const it of prev?.items || []) (prevBySite[it.site] ||= []).push(it);
 
@@ -91,12 +92,20 @@ for (const s of data.sources) s.count = data.items.filter((it) => it.site === s.
 if (before !== data.items.length) console.log(`${before - data.items.length} annonce(s) vendue(s)/indisponible(s) retirée(s)`);
 
 // ---- conversion en euros (taux BCE via frankfurter.dev) ----
-let rate = data.usdEur;
+// Table de taux « 1 unité de devise = x € ». Une devise absente de la table donne
+// priceEUR = null (« prix à vérifier ») : jamais de livre ou de franc suisse lus comme des euros.
+const FX_SYMBOLS = ['USD', 'GBP', 'CHF'];
+let fx = data.fx || (data.usdEur ? { date: data.usdEur.date, toEUR: { USD: data.usdEur.rate } } : null) || prevFx;
 try {
-  const r = await (await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR', { signal: AbortSignal.timeout(15000) })).json();
-  data.usdEur = rate = { rate: r.rates.EUR, date: r.date };
+  const r = await (await fetch(`https://api.frankfurter.dev/v1/latest?base=EUR&symbols=${FX_SYMBOLS.join(',')}`, { signal: AbortSignal.timeout(15000) })).json();
+  const toEUR = {};
+  for (const c of FX_SYMBOLS) if (r.rates?.[c] > 0) toEUR[c] = Math.round(1e5 / r.rates[c]) / 1e5;
+  if (toEUR.USD) fx = { date: r.date, toEUR };
 } catch (e) { console.warn('taux de change indisponible :', e.message); }
-if (!rate) throw new Error('Aucun taux de change disponible');
+if (!fx?.toEUR?.USD) throw new Error('Aucun taux de change disponible');
+data.fx = fx;
+data.usdEur = { rate: fx.toEUR.USD, date: fx.date };   // champ historique, lu par les pages
+const inconnues = new Set();
 
 // ---- grandes catégories communes à tous les sites ----
 const GROUPS = [
@@ -115,12 +124,19 @@ const groupOf = (it) => {
   for (const [g, re] of TITLE_RULES) if (re.test(t)) return g;
   return 'other';
 };
-const enEuros = (n, cur) => n == null ? null : Math.round(cur === 'USD' ? n * rate.rate : n);
+const enEuros = (n, cur) => {
+  if (n == null) return null;
+  if (cur === 'EUR') return Math.round(n);
+  if (fx.toEUR[cur]) return Math.round(n * fx.toEUR[cur]);
+  inconnues.add(cur || '(aucune)');
+  return null;
+};
 for (const it of data.items) {
   it.priceEUR = enEuros(it.priceNum, it.currency);
   it.priceHighEUR = enEuros(it.priceHigh, it.currency);
   it.group = groupOf(it);
 }
+if (inconnues.size) console.warn(`devise(s) sans taux : ${[...inconnues].join(', ')} → prix en euros laissé vide`);
 const baisses = data.items.filter((it) => it.priceDrop > 0);
 if (baisses.length) console.log(`${baisses.length} baisse(s) de prix en cours`);
 

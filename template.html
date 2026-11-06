@@ -66,8 +66,11 @@ main{padding-top:24px;padding-bottom:70px}
 .pic:hover .arr{opacity:1}
 @media(hover:none){.arr{opacity:.9}}
 .mkb{position:absolute;right:10px;bottom:10px;z-index:3;border:0;border-radius:999px;padding:6px 11px;background:#000b;color:#fff;font-size:12px;font-weight:700;opacity:0;transition:opacity .2s;backdrop-filter:blur(4px)}
+.siteb{right:auto;left:10px}
 .pic:hover .mkb,.mkb:focus-visible{opacity:1}
 @media (hover:none){.mkb{opacity:.95}}
+.ghost.site{border-color:var(--rose);color:var(--rose);white-space:nowrap}
+.ghost.site:hover{background:#fff0f3}
 .dots{position:absolute;bottom:10px;left:0;right:0;display:flex;justify-content:center;gap:4px;z-index:2}
 .dots i{width:6px;height:6px;border-radius:50%;background:#ffffff99}
 .dots i.on{background:#fff;transform:scale(1.2)}
@@ -172,7 +175,7 @@ dialog::backdrop{background:#0008}
         <label style="flex:.55"><span>Budget max (€)</span><input id="qmax" type="number" min="0" step="100" inputmode="numeric" placeholder="aucun"></label>
         <button class="go" aria-label="Rechercher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5.5 5.5"/></svg></button>
       </div>
-      <div class="right"><button class="ghost" id="favBtn" title="Mes favoris"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-8-5.2-8-11.2A4.8 4.8 0 0 1 12 7a4.8 4.8 0 0 1 8 2.8C20 15.8 12 21 12 21z"/></svg><span class="txt2">Favoris</span><span class="n" id="favN" hidden></span></button></div>
+      <div class="right"><button class="ghost site" id="favSite" hidden title="Ouvre l'admin du site (onglet Importer) avec vos favoris pré-sélectionnés : rien n'est créé sans votre validation">➕ <span class="txt2">Favoris → site</span><span class="n" id="favSiteN"></span></button><button class="ghost" id="favBtn" title="Mes favoris"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-8-5.2-8-11.2A4.8 4.8 0 0 1 12 7a4.8 4.8 0 0 1 8 2.8C20 15.8 12 21 12 21z"/></svg><span class="txt2">Favoris</span><span class="n" id="favN" hidden></span></button></div>
     </div>
     <div class="cats">
       <div class="scroll" id="cats"></div>
@@ -239,7 +242,7 @@ const S = { group: 'all', sites: new Set(ALL_SITES), sort: 'recent', pmin: null,
 const PAGE = 40;
 
 const priceHtml = (it) => {
-  if (it.priceEUR == null) return `<b>Prix sur demande</b>`;
+  if (it.priceEUR == null) return it.priceNum != null ? `<b>${esc(it.price)}</b> <em>(devise non convertie)</em>` : `<b>Prix sur demande</b>`;
   const orig = it.currency === 'USD' ? ` <em>(${esc(it.price)})</em>` : (/HT/.test(it.price || '') ? ' <em>HT</em>' : '');
   return `<b>${eur(it.priceEUR)}</b>${orig}`;
 };
@@ -277,7 +280,7 @@ function apply() {
   $('#empty').hidden = l.length > 0;
   $('#openF').classList.toggle('on', active);
   $('#favBtn').classList.toggle('on', S.favOnly);
-  const fn = $('#favN'); fn.hidden = !favs.size; fn.textContent = favs.size;
+  updFavN();
   if (document.activeElement !== $('#qmax')) $('#qmax').value = S.pmax ?? '';
   renderCats(); more();
 }
@@ -292,6 +295,7 @@ function card(it, i) {
       ${it._new ? '<span class="tag">Nouveau</span>' : ''}
       <button class="heart ${favs.has(it.key) ? 'on' : ''}" data-act="fav" aria-label="Favori">${HEART}</button>
       ${n ? '<button class="mkb" data-act="mk" title="Créer la story et le post pour Instagram">📸 Story / post</button>' : ''}
+      <button class="mkb siteb" data-act="site" title="Pré-sélectionner cette annonce dans l'admin du site (brouillon à valider)">➕ Site</button>
       ${n > 1 ? `<button class="arr l" data-act="prev">‹</button><button class="arr r" data-act="next">›</button><div class="dots">${Array.from({ length: Math.min(n, 5) }, (_, k) => `<i class="${k ? '' : 'on'}"></i>`).join('')}</div>` : ''}
     </div>
     <div class="txt">
@@ -317,7 +321,7 @@ function step(c, d) {
 function toggleFav(key) {
   favs.has(key) ? favs.delete(key) : favs.add(key); saveFavs();
   document.querySelectorAll('.card').forEach((c) => { const it = S.list[+c.dataset.i]; if (it) c.querySelector('.heart').classList.toggle('on', favs.has(it.key)); });
-  const fn = $('#favN'); fn.hidden = !favs.size; fn.textContent = favs.size;
+  updFavN();
 }
 $('#grid').addEventListener('click', (e) => {
   const c = e.target.closest('.card'); if (!c) return;
@@ -326,6 +330,7 @@ $('#grid').addEventListener('click', (e) => {
   if (act === 'next') return step(c, 1);
   if (act === 'fav') { toggleFav(it.key); if (S.favOnly) apply(); return; }
   if (act === 'mk') return window.TTMMaker?.open(it);
+  if (act === 'site') return toSite([it]);
   openListing(it);
 });
 
@@ -333,10 +338,10 @@ $('#grid').addEventListener('click', (e) => {
 function openListing(it) {
   const ph = it.photos.slice(0, 5), cls = ph.length >= 3 ? '' : ph.length === 2 ? 'two' : 'one';
   const gal = ph.length ? `<div class="gal ${cls}">${ph.map((p, k) => `<button data-v="${k}"><img referrerpolicy="no-referrer" src="${esc(p)}" alt=""></button>`).join('')}</div>` : '';
-  const price = it.priceEUR != null ? eur(it.priceEUR) : 'Prix sur demande';
+  const price = it.priceEUR != null ? eur(it.priceEUR) : it.priceNum != null ? esc(it.price) : 'Prix sur demande';
   const extra = it.priceEUR != null && it.currency === 'USD' ? `<small>(${esc(it.price)})</small>` : /HT/.test(it.price || '') ? '<small>HT</small>' : '';
   $('#ld').innerHTML = `<div class="mh" style="border:0"><button class="x" onclick="ld.close()" aria-label="Fermer">✕</button><span style="font-size:14px;font-weight:600;color:var(--mute)">${esc(it.siteName)}</span></div>
-    <div class="lbtop"><div></div><div class="acts">${it.photos.length ? '<button class="ghost" data-do="mk">📸 Story / post</button>' : ''}<button class="ghost" data-do="notif">🔔 Aperçu notification</button><button class="ghost" data-do="fav">${favs.has(it.key) ? '♥ Enregistré' : '♡ Enregistrer'}</button></div></div>
+    <div class="lbtop"><div></div><div class="acts"><button class="ghost" data-do="site" title="Pré-sélectionner cette annonce dans l'admin du site (brouillon à valider)">➕ Site</button>${it.photos.length ? '<button class="ghost" data-do="mk">📸 Story / post</button>' : ''}<button class="ghost" data-do="notif">🔔 Aperçu notification</button><button class="ghost" data-do="fav">${favs.has(it.key) ? '♥ Enregistré' : '♡ Enregistrer'}</button></div></div>
     ${gal}
     <div class="lb"><div><h1>${esc(it.title)}</h1><div class="sub">${esc(it.siteName)}${it.category ? ' · ' + esc(it.category) : ''}${it._new ? ' · Nouveau' : ''}</div><hr>
       ${it.description ? `<div class="desc">${esc(it.description)}</div>` : '<div class="sub">Pas de description.</div>'}
@@ -354,6 +359,7 @@ $('#ld').addEventListener('click', (e) => {
   if (b.dataset.do === 'fav') { toggleFav(it.key); b.textContent = favs.has(it.key) ? '♥ Enregistré' : '♡ Enregistrer'; if (S.favOnly) apply(); }
   if (b.dataset.do === 'notif') showNotif(it);
   if (b.dataset.do === 'mk') window.TTMMaker?.open(it);
+  if (b.dataset.do === 'site' && toSite([it])) b.textContent = '✔ Envoyé à l’admin';
 });
 
 /* ---------- aperçu notification ---------- */
@@ -401,6 +407,27 @@ let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout
 $('#qmax').addEventListener('input', () => { S.pmax = $('#qmax').value === '' ? null : +$('#qmax').value; apply(); });
 $('.pill .go').onclick = () => { S.q = $('#q').value; apply(); };
 $('#favBtn').onclick = () => { S.favOnly = !S.favOnly; apply(); };
+
+/* ---------- envoi vers l'admin du site (trouvetonmatos.fr/admin-ttm, onglet Importer) ----------
+   Les annonces sont seulement PRÉ-SÉLECTIONNÉES : l'admin crée des brouillons (non publiés) après validation. */
+function updFavN() {
+  const fn = $('#favN'); fn.hidden = !favs.size; fn.textContent = favs.size;
+  const live = [...favs].filter((k) => byKey.has(k)).length;
+  $('#favSite').hidden = !live || !window.TTMSite; $('#favSiteN').textContent = live;
+  $('#favSite').title = `Ouvre l'admin du site (onglet Importer) avec ${live} favori${live > 1 ? 's' : ''} pré-sélectionné${live > 1 ? 's' : ''} : rien n'est créé sans votre validation`;
+}
+function toSite(list, gone = 0) {
+  if (!window.TTMSite) { toast('Envoi vers le site indisponible (maker.js non chargé).'); return false; }
+  const r = window.TTMSite.send(list);
+  if (!r.n) { toast('Aucune annonce à envoyer.'); return false; }
+  if (!r.ok) { toast('Fenêtre bloquée par le navigateur : autorisez les fenêtres pour cette page.'); return false; }
+  toast(`${r.n} annonce${r.n > 1 ? 's' : ''} pré-sélectionnée${r.n > 1 ? 's' : ''} dans l’admin du site${r.cut ? ` (limite ${window.TTMSite.max} : ${r.cut} non envoyée${r.cut > 1 ? 's' : ''})` : ''}${gone ? ` · ${gone} favori${gone > 1 ? 's' : ''} disparu${gone > 1 ? 's' : ''} ignoré${gone > 1 ? 's' : ''}` : ''}`);
+  return true;
+}
+$('#favSite').onclick = () => {
+  const keys = [...favs], list = keys.map((k) => byKey.get(k)).filter(Boolean);
+  toSite(list, keys.length - list.length);
+};
 
 function renderFoot() { $('#foot').innerHTML = `Données du ${new Date(DATA.generatedAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })} · ${items.length.toLocaleString('fr-FR')} annonces · ${DATA.sources.length} sites · Tous les prix sont en euros ; les prix en dollars sont convertis au taux BCE du ${DATA.usdEur.date} (1 $ = ${DATA.usdEur.rate.toFixed(4).replace('.', ',')} €). Prix hors taxes, tels qu’affichés par les vendeurs.${DATA.sources.some((s) => s.stale) ? ' ⚠ Certaines sources n’ont pas répondu : leurs annonces datent de la mise à jour précédente.' : ''}`; }
 renderFoot();
