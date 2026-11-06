@@ -59,6 +59,34 @@ jobs:
         uses: actions/deploy-pages@v4
 
   # ------------------------------------------------------------------
+  # Instagram, phase 2 (facultatif) : à chaque exécution, demande au site de
+  # publier UNE publication en attente (cochée « Poster sur Instagram » lors
+  # de la publication dans l'admin). Les posts sont ainsi étalés (~1 par
+  # exécution). Inactif tant que le secret IG_CRON_SECRET n'existe pas ;
+  # un échec n'interrompt jamais le tableau de bord ni la relance.
+  # ------------------------------------------------------------------
+  instagram:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    continue-on-error: true
+    steps:
+      - name: Publier la prochaine publication Instagram en attente
+        env:
+          IG_CRON_SECRET: ${{ secrets.IG_CRON_SECRET }}
+        run: |
+          if [ -z "$IG_CRON_SECRET" ]; then
+            echo "IG_CRON_SECRET absent : publication Instagram automatique inactive."
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/rep -w '%{http_code}' --max-time 60 -X POST \
+            -H "Authorization: Bearer $IG_CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            "https://trouvetonmatos.fr/api/ig-publish-next" -d '{}') || true
+          echo "Réponse HTTP $code :"; head -c 2000 /tmp/rep 2>/dev/null; echo
+
+  # ------------------------------------------------------------------
   # Relance en chaîne.
   #
   # Le planificateur de GitHub n'honore pas les crons courts : mesuré sur
