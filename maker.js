@@ -58,6 +58,8 @@
 #mkdlg .mk-cap{border-top:1px solid var(--mk-line);padding-top:12px}
 #mkdlg .mk-caprow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 #mkdlg .mk-caprow select{width:auto;flex:1;min-width:120px}
+#mkdlg .mk-sold{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--mk-ink);cursor:pointer}
+#mkdlg .mk-sold input{accent-color:var(--mk-rose)}
 #mkdlg .mk-sm{padding:8px 13px;font-size:13px;border-radius:10px}
 @media (max-width:800px){#mkdlg .mk-bd{grid-template-columns:1fr}#mkdlg .mk-lnk{display:none}#mkdlg .mk-msg{flex-basis:100%}#mkdlg .mk-go{flex:1}}`;
 
@@ -86,8 +88,9 @@
       <div class="mk-f mk-cap"><span>Description Instagram</span>
         <textarea id="mkCap" rows="10" spellcheck="true" aria-label="Description Instagram"></textarea>
         <div class="mk-caprow">
-          <select name="capStyle" aria-label="Style de description"><option value="full">Complète (avec le contenu du lot)</option><option value="short">Courte</option></select>
-          <button type="button" class="mk-go alt mk-sm" id="mkCapNew" title="Proposer une autre accroche">↻ Autre accroche</button>
+          <select name="capStyle" aria-label="Style de description"><option value="full">Détaillée</option><option value="short">Courte</option></select>
+          <select name="etat" aria-label="État"><option>Neuf</option><option>Comme neuf</option><option selected>Très bon état</option><option>Bon état</option></select>
+          <label class="mk-sold"><input type="checkbox" name="sold"> VENDU</label>
           <button type="button" class="mk-go mk-sm" id="mkCapCopy">Copier</button>
         </div>
       </div>
@@ -110,7 +113,7 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
-  const MK = { engine: null, item: null, photos: [], busy: false, preview: null, capVariant: 0, capDirty: false };
+  const MK = { engine: null, item: null, photos: [], busy: false, preview: null, capDirty: false };
 
   /* ---------- moteur du Studio ---------- */
   const loadScript = (src) => new Promise((ok, ko) => {
@@ -154,56 +157,107 @@
   const selectedPhotos = () => MK.photos.filter((p) => p.ok && p.checked);
 
   /* ---------- description Instagram (générée dans la page, sans service externe) ----------
-     Ne mentionne jamais le vendeur d'origine ni le prix d'achat : seulement l'article et le prix final. */
-  const HOOKS = {
-    cameras: ['Une caméra prête pour votre prochain tournage.', 'Le corps caméra qu’il vous faut pour passer au niveau supérieur.', 'Prête à tourner, contrôlée, disponible tout de suite.'],
-    lenses: ['Une série d’optiques prête à tourner.', 'Du verre de cinéma pour donner du caractère à vos images.', 'Des optiques cinéma, contrôlées et prêtes à partir.'],
-    monitors: ['Un retour image fiable pour le plateau.', 'Gardez l’œil sur chaque plan.', 'Le moniteur qu’il manque à votre configuration.'],
-    lights: ['De la lumière pour sculpter vos plans.', 'Un éclairage pro, prêt pour le plateau.', 'Éclairez vos tournages comme il se doit.'],
-    support: ['Machinerie et supports pour des mouvements maîtrisés.', 'De la stabilité pour vos plans.', 'Le support qu’il faut pour tourner sereinement.'],
-    audio: ['Un son propre pour vos tournages.', 'L’audio pro, prêt pour le plateau.', 'Pour un son à la hauteur de vos images.'],
-    accessories: ['L’accessoire qui complète votre configuration.', 'Le petit plus qui change tout sur le plateau.', 'Complétez votre kit de tournage.'],
-    other: ['Du matériel cinéma pro, prêt à tourner.', 'Une belle pièce pour votre parc matériel.', 'Disponible dès maintenant.'],
-  };
+     Modèle : les publications du compte @trouvetonmatos.fr —
+       🎬 {Produit} dispo !            (🚨VENDU🚨 {Produit} une fois vendu)
+       Avec … / Inclus: + liste « -1x … »
+       📩 Infos & photos : contact@trouvetonmatos.fr
+       #MaterielCine #Tournage #FilmMaking #TrouveTonMatos
+     La version détaillée ajoute l'état, les caractéristiques relevées dans l'annonce, le contenu complet
+     et le prix. Ne mentionne jamais le vendeur d'origine ni le prix d'achat. */
+  const HOUSE_TAGS = ['#MaterielCine', '#Tournage', '#FilmMaking', '#TrouveTonMatos'];
   const GROUP_TAGS = {
-    cameras: ['#camera', '#cinemacamera'], lenses: ['#cinelens', '#objectif', '#cinemalenses'], monitors: ['#moniteur', '#monitoring'],
-    lights: ['#eclairage', '#lighting'], support: ['#machinerie', '#grip'], audio: ['#audio', '#prisedeson'], accessories: ['#accessoires', '#cameragear'], other: ['#cameragear'],
+    cameras: ['#CameraCinema', '#CinemaCamera'], lenses: ['#OptiqueCine', '#CineLens', '#Objectif'], monitors: ['#Moniteur', '#Monitoring'],
+    lights: ['#Eclairage', '#Lighting', '#Gaffer'], support: ['#Machinerie', '#Grip'], audio: ['#PriseDeSon', '#Audio'],
+    accessories: ['#Accessoires', '#CameraGear', '#AssistantCamera'], other: ['#CameraGear'],
   };
-  const BRANDS = ['ARRI', 'RED', 'Sony', 'Canon', 'Blackmagic', 'Panasonic', 'Kinefinity', 'Z CAM', 'Cooke', 'Zeiss', 'Leica', 'Angenieux', 'Angénieux', 'Sigma', 'Fujinon', 'Tokina', 'Laowa', 'DZOFilm', 'Atlas', 'Vazen', 'Sirui', 'Panavision', 'Hawk', 'Kowa', 'Schneider', 'Xeen', 'Samyang', 'Rokinon', 'IronGlass', 'P+S Technik', 'Ultra Prime', 'Master Prime', 'Supreme', 'Tilta', 'Wooden Camera', 'Bright Tangerine', 'SmallHD', 'Atomos', 'Teradek', 'Aputure', 'Nanlite', 'Astera', 'Kino Flo', 'Litepanels', 'Creamsource', 'Sachtler', 'OConnor', "O'Connor", 'Ronin', 'DJI', 'Easyrig', 'Movi', 'Freefly', 'Sennheiser', 'Sound Devices', 'Rode'];
-  const tagOf = (b) => '#' + b.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const BRANDS = ['ARRI', 'RED', 'Sony', 'Canon', 'Blackmagic', 'Panasonic', 'Kinefinity', 'Z CAM', 'Cooke', 'Zeiss', 'Leica', 'Angenieux', 'Angénieux', 'Sigma', 'Fujinon', 'Tokina', 'Laowa', 'DZOFilm', 'Atlas', 'Vazen', 'Sirui', 'Panavision', 'Hawk', 'Kowa', 'Schneider', 'Xeen', 'Samyang', 'Rokinon', 'IronGlass', 'P+S Technik', 'Century', 'Tilta', 'Wooden Camera', 'Bright Tangerine', 'SmallHD', 'Atomos', 'Teradek', 'Aputure', 'Nanlite', 'Astera', 'Kino Flo', 'Litepanels', 'Creamsource', 'Sachtler', 'OConnor', 'Ronin', 'DJI', 'Easyrig', 'Freefly', 'Sennheiser', 'Sound Devices', 'Rode', 'Cine RT', 'Preston', 'cmotion'];
+  const MODELS = [/alexa ?mini ?lf/i, /alexa ?mini/i, /alexa ?35/i, /alexa ?lf/i, /amira/i, /komodo/i, /raptor/i, /monstro/i, /helium/i, /gemini/i, /venice/i, /fx ?[369]\b/i, /c ?[357]00\b/i, /ursa/i, /ultra ?prime/i, /master ?prime/i, /supreme ?prime/i, /signature ?prime/i, /optimo/i, /panchro/i, /ronin ?2/i, /easyrig/i];
+  // état : phrase de la version détaillée (optiques / autres) et début de phrase de la version courte
+  const ETAT = {
+    'Neuf': ['Neuf, jamais utilisé.', 'Neuf, jamais utilisé.', 'Neuf, jamais utilisé'],
+    'Comme neuf': ['Comme neuf : état cosmétique, optique et mécanique impeccable.', 'Comme neuf : état cosmétique et fonctionnel impeccable.', 'Comme neuf'],
+    'Très bon état': ['Très bon état cosmétique, optique et mécanique.', 'Très bon état cosmétique et fonctionnel.', 'En très bon état'],
+    'Bon état': ['Bon état cosmétique, optique et mécanique.', 'Bon état cosmétique et fonctionnel.', 'En bon état'],
+  };
+  const camelTag = (s) => '#' + s.normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^A-Za-z0-9]+/).filter(Boolean)
+    .map((w) => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join('');
   const eurTxt = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(n).replace(/[  ]/g, ' ') + ' € HT';
+  const uniq = (a) => [...new Set(a)];
+  const descLines = (it) => String(it.description || '').split(/\n+/).map((l) => l.replace(/ /g, ' ').trim()).filter(Boolean);
+
+  // Caractéristiques relevées dans le titre et la description de l'annonce.
+  function specs(it, title) {
+    const txt = title + '\n' + (it.description || ''), out = [], cam = it.group === 'cameras', lens = it.group === 'lenses';
+    const mtxt = (title + '\n' + descLines(it).filter((l) => !/adapt/i.test(l)).join('\n'));   // un adaptateur n'est pas la monture
+    const mounts = uniq((mtxt.match(/\b(LPL|PL|EF|RF|E[- ]?mount|L[- ]?mount|B4|MFT|PV)\b/gi) || [])
+      .map((m) => (/mount/i.test(m) ? m[0].toUpperCase() + '-mount' : m.toUpperCase())));
+    if (mounts.length) out.push(`Monture : ${mounts.join(' / ')}`);
+    const FMT = { s16: 'Super 16', super16: 'Super 16', s35: 'Super 35', super35: 'Super 35', fullframe: 'Full Frame', ff: 'Full Frame', vv: 'VistaVision', lf: 'Large Format', largeformat: 'Large Format' };
+    const fmt = uniq((txt.match(/\b(Super ?16|S16|Super ?35|S35|Full ?Frame|FF|VV|LF|Large Format)\b/gi) || []).map((m) => FMT[m.toLowerCase().replace(/\s/g, '')] || m));
+    if (fmt.length) out.push(`${cam ? 'Capteur' : 'Couverture'} : ${fmt.join(' / ')}`);
+    const res = uniq((txt.match(/\b\d{1,2}(?:[.,]\d)?K\b/g) || []).map((r) => r.toUpperCase()));
+    if (res.length && cam) out.push(`Résolution : ${res.join(' / ')}`);
+    const zoom = txt.match(/\b(\d{1,3}(?:[.,]\d)?)\s?[-–]\s?(\d{2,4})\s?mm\b/i);
+    const focals = uniq((txt.match(/\b\d{1,3}(?:[.,]\d)?\s?mm\b/gi) || []).map((m) => parseFloat(m.replace(',', '.'))))
+      .filter((v) => v >= 4 && v <= 1200 && !(zoom && (v === parseFloat(zoom[1]) || v === parseFloat(zoom[2])))).sort((a, b) => a - b);
+    if (lens) {
+      if (zoom) out.push(`Zoom : ${zoom[1]}-${zoom[2]} mm`);
+      if (focals.length > 1) out.push(`Focales : ${focals.join(', ')} mm`);
+      else if (focals.length === 1 && !zoom) out.push(`Focale : ${focals[0]} mm`);
+      const tst = uniq((txt.match(/\bT\s?\d(?:[.,]\d{1,2})?\b/g) || []).map((t) => 'T' + t.replace(/^T\s?/, '').replace(',', '.')));
+      if (tst.length) out.push(`Ouverture : ${tst.join(' / ')}`);
+    }
+    const hrs = cam && txt.match(/(\d[\d .,']*\d|\d)\s?(hours|hrs|heures|stunden|std\.?)\b/i);
+    if (hrs) out.push(`Heures : ${hrs[1].replace(/[ .,']/g, '')} h`);
+    const lic = descLines(it).find((l) => /^(installed )?licen[cs]es?\s*:/i.test(l));
+    if (lic) out.push(`Licences : ${lic.replace(/^[^:]*:\s*/, '')}`);
+    return out;
+  }
+  // Contenu du lot : lignes de la description, nettoyées (références fabricant, remarques du vendeur, rappels du titre).
   function lotLines(it) {
     const title = (it.title || '').trim().toLowerCase(), out = [];
-    for (let l of String(it.description || '').split(/\n+/)) {
-      l = l.replace(/ /g, ' ').trim();
-      if (!l || l.toLowerCase() === title || /^(includes?|including|inklusive|contents?|lieferumfang|set includes?)\s*:?$/i.test(l)) continue;
+    for (let l of descLines(it)) {
+      if (l.toLowerCase() === title || /^(includes?|including|inklusive|contents?|lieferumfang|set includes?|scope of delivery)\s*:?$/i.test(l)) continue;
+      if (/^(installed )?licen[cs]es?\s*:/i.test(l)) continue;   // déjà dans les caractéristiques
       if (/https?:|www\.|€|\$|£|price|preis|prix|shipping|versand|vat|mwst|warranty|garantie|contact|e-?mail|phone|tel\.|call us|order|bestell/i.test(l)) continue;
-      if (/on behalf|client|customer|available|se(p|pe)arately|condition|\bused\b|\bsold\b|\bnote\b|^\*|please|ask us|on request|auf anfrage/i.test(l)) continue;   // remarques du vendeur
+      if (/on behalf|client|customer|available|se(p|pe)arately|condition|\bused\b|\bsold\b|\bnote\b|^\*|please|ask us|on request|auf anfrage|gebraucht|zustand|located|pick ?up|abholung/i.test(l)) continue;   // remarques du vendeur
       l = l.replace(/^[-•*·–]\s*/, '');
       const q = l.match(/^(\d+)\s*x\s*/i); if (q) l = l.slice(q[0].length);
       l = l.replace(/^(K\d[.\w-]*|[A-Z]{1,3}\d[\w.-]{3,})\s+/, '');                    // référence fabricant
-      l = ((q ? q[1] + ' × ' : '') + l).trim();
+      l = l.replace(/^\d+x\s*/i, '');
       if (l.length < 3) continue;
       const words = l.toLowerCase().match(/[a-z0-9]+/g) || [];
       if (words.length && words.every((w) => title.includes(w))) continue;   // simple rappel du titre
-      out.push(l.length > 70 ? l.slice(0, 68).trimEnd() + '…' : l);
+      out.push(((q ? q[1] + 'x ' : '') + (l.length > 90 ? l.slice(0, 88).trimEnd() + '…' : l)).trim());
     }
-    return out;
+    return uniq(out);
   }
+  const joinFr = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' et ' + a[a.length - 1]);
   function caption() {
     const it = MK.item; if (!it) return '';
     const f = $('#mkForm'), sale = salePrice(), title = f.title.value.trim() || it.title || '';
-    const g = HOOKS[it.group] ? it.group : 'other', hooks = HOOKS[g];
-    const hook = hooks[MK.capVariant % hooks.length];
-    const hay = (title + ' ' + (it.category || '')).toLowerCase();
-    const brands = BRANDS.filter((b) => new RegExp('(^|[^a-z0-9])' + b.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(hay));
-    const tags = [...new Set([...brands.map(tagOf), ...GROUP_TAGS[g], '#trouvetonmatos', '#materielcinema', '#cinema', '#filmmaking', '#tournage', '#occasion'])].slice(0, 14);
-    const price = sale != null ? `💰 ${eurTxt(sale)}` : '💰 Prix sur demande';
-    const cta = '📩 Intéressé·e ? Écrivez-nous en DM ou rendez-vous sur trouvetonmatos.fr';
-    if (f.capStyle.value === 'short') return [`🎬 ${title}`, hook, '', price, cta, '', tags.join(' ')].join('\n');
-    const lines = lotLines(it), shown = lines.slice(0, 8);
-    const lot = shown.length ? ['', '📦 Le lot comprend :', ...shown.map((l) => '• ' + l), ...(lines.length > shown.length ? ['• … et plus encore (détails en DM)'] : [])] : [];
-    return [`🎬 ${title}`, '', hook, ...lot, '', price, cta, '', tags.join(' ')].join('\n');
+    const g = GROUP_TAGS[it.group] ? it.group : 'other', sold = f.sold.checked;
+    const head = sold ? `🚨VENDU🚨 ${title}` : `🎬 ${title} dispo !`;
+    const contact = '📩 Infos & photos : contact@trouvetonmatos.fr';
+    const lot = lotLines(it);
+    if (f.capStyle.value === 'short') {
+      const avec = lot.slice(0, 4).map((l) => l.replace(/^1x /, '')), e = ETAT[f.etat.value];
+      let line = avec.length ? `avec ${joinFr(avec)}` : '';
+      line = sold ? (line && line[0].toUpperCase() + line.slice(1)) : [e && e[2], line].filter(Boolean).join(', ');
+      if (line) line = line[0].toUpperCase() + line.slice(1) + (lot.length > 4 ? '…' : '.');
+      return [head, ...(line ? [line] : []), '', contact, '', HOUSE_TAGS.join(' ')].join('\n');
+    }
+    const hay = title + ' ' + (it.category || '');
+    const brands = BRANDS.filter((b) => new RegExp('(^|[^a-z0-9])' + b.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(hay.toLowerCase()));
+    const models = MODELS.map((r) => (title.match(r) || [])[0]).filter(Boolean).slice(0, 2);
+    const tags = uniq([...HOUSE_TAGS, ...brands.map(camelTag), ...models.map(camelTag), ...GROUP_TAGS[g], '#MaterielCineOccasion', '#Cinematography']).slice(0, 16);
+    const e = ETAT[f.etat.value], etatLines = e && !sold ? [g === 'lenses' ? e[0] : e[1]] : [];
+    const sp = specs(it, title), shown = lot.slice(0, 20);
+    return [head, ...etatLines,
+      ...(sp.length ? ['', 'Caractéristiques:', '', ...sp.map((s) => '-' + s)] : []),
+      ...(shown.length ? ['', 'Inclus:', '', ...shown.map((l) => '-' + l), ...(lot.length > shown.length ? [`-… et ${lot.length - shown.length} autres éléments`] : [])] : []),
+      ...(sale != null && !sold ? ['', `💶 Prix : ${eurTxt(sale)}`] : []),
+      '', contact, '', tags.join(' ')].join('\n');
   }
   function updateCaption(force) {
     if (MK.capDirty && !force) return;
@@ -293,7 +347,7 @@
     f.buy.value = it.priceEUR != null ? Math.round(it.priceEUR) : '';
     f.margin.value = saved.margin; f.scale.value = saved.scale; f.mode.value = saved.mode;
     f.zoom.value = 1; f.sale.value = ''; linkPrices('margin');
-    MK.capVariant = 0; updateCaption(true);
+    f.etat.value = 'Très bon état'; f.sold.checked = false; updateCaption(true);
     $('#mkSrc').textContent = `${it.siteName || it.site || ''}${it.currency === 'USD' ? ' · prix converti en €' : ''}`;
     $('#mkMsg').textContent = 'Chargement du Studio et des photos…';
     $('#mkPhotos').innerHTML = '';
@@ -348,7 +402,7 @@
     if (e.target.id === 'mkCap') { MK.capDirty = true; return; }   // texte retouché à la main : on n'y touche plus
     if (['buy', 'margin', 'sale'].includes(e.target.name)) linkPrices(e.target.name);
     if (['title', 'buy', 'margin', 'sale'].includes(e.target.name)) updateCaption();
-    if (e.target.name === 'capStyle') { updateCaption(true); return; }
+    if (['capStyle', 'etat', 'sold'].includes(e.target.name)) { updateCaption(true); return; }
     const f = $('#mkForm');
     store.set(PREFS, { margin: num(f.margin.value) ?? 0, scale: Number(f.scale.value), mode: f.mode.value });
     drawPreview();
@@ -357,7 +411,6 @@
   $('#mkClose').onclick = () => dlg.close();
   dlg.addEventListener('close', () => { MK.item = null; });
   dlg.addEventListener('keydown', (e) => e.stopPropagation());   // les raccourcis de la page ne réagissent pas pendant la saisie
-  $('#mkCapNew').onclick = () => { MK.capVariant++; updateCaption(true); };
   $('#mkCapCopy').onclick = async () => {
     const ok = await copyCaption();
     $('#mkCapCopy').textContent = ok ? '✔ Copiée' : 'Copie impossible';
