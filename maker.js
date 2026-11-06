@@ -386,7 +386,9 @@
     const { url, n } = importLink(all);
     let w = null;
     try { w = window.open(url, ADMIN_TAB); } catch {}
-    try { if (w) w.opener = null; } catch {}   // l'admin n'a pas besoin d'accéder à cette page
+    // NE PAS couper w.opener : Chrome n'autorise window.open(url, 'ttm-admin') à renaviguer
+    // l'onglet admin (autre origine) que si cette page en est l'opener. Sans lui, chaque envoi
+    // ouvrirait un NOUVEL onglet admin au lieu d'ajouter la sélection dans celui déjà ouvert.
     return { ok: !!w, n, cut: all.length - n, url };
   }
   window.TTMSite = { send, link: (list) => importLink(list).url, max: MAX_IMPORT };
