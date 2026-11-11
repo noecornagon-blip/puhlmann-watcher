@@ -121,14 +121,47 @@ jobs:
           fi
           echo "Attente de 25 min avant la relance…"
           sleep 1500
-          code=$(curl -sS -o /tmp/rep -w '%{http_code}' -X POST \
+
+          api() { curl -sS --max-time 30 \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$DEPOT/actions/workflows/dashboard.yml/dispatches" \
-            -d '{"ref":"main"}')
-          if [ "$code" = "204" ]; then
-            echo "Relance programmée."
-          else
-            echo "Échec de la relance (HTTP $code) :"; cat /tmp/rep; exit 1
-          fi
+            -H "X-GitHub-Api-Version: 2022-11-28" "$@"; }
+
+          # Demande une nouvelle exécution.
+          demander() {
+            api -o /tmp/rep -w '%{http_code}' -X POST \
+              "https://api.github.com/repos/$DEPOT/actions/workflows/dashboard.yml/dispatches" \
+              -d '{"ref":"main"}'
+          }
+
+          # Une exécution postérieure à la nôtre a-t-elle vraiment démarré ?
+          # Les identifiants d'exécution sont croissants : tout id supérieur au
+          # nôtre est une exécution créée après nous. On ignore celles que
+          # GitHub a refusé de démarrer (startup_failure) ou annulées.
+          vivantes() {
+            api "https://api.github.com/repos/$DEPOT/actions/workflows/dashboard.yml/runs?per_page=20" \
+              | jq --argjson moi "$GITHUB_RUN_ID" '[.workflow_runs[]
+                  | select(.id > $moi)
+                  | select(.conclusion != "startup_failure" and .conclusion != "cancelled")]
+                  | length' 2>/dev/null || echo 0
+          }
+
+          # GitHub refuse de démarrer une exécution sur deux ou trois pour cent
+          # des demandes (startup_failure, « No jobs were run »). Sans
+          # vérification, un seul refus casse la chaîne jusqu'au prochain cron,
+          # soit plusieurs heures. On vérifie donc, et on réessaie.
+          for essai in 1 2 3; do
+            code=$(demander)
+            if [ "$code" != "204" ]; then
+              echo "Demande refusée (HTTP $code) :"; cat /tmp/rep; echo
+            fi
+            sleep 60
+            if [ "$(vivantes)" -gt 0 ]; then
+              echo "Relance confirmée (essai $essai)."
+              exit 0
+            fi
+            echo "Aucune exécution n'a démarré (essai $essai) — nouvelle tentative."
+          done
+
+          echo "Trois tentatives sans succès : la chaîne s'arrête ici, le cron reprendra la main."
+          exit 1
