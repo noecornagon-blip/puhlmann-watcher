@@ -10,14 +10,19 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: dashboard
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    # La sérialisation porte sur le build seul, pas sur l'exécution entière.
+    # Au niveau de l'exécution, le groupe restait tenu pendant les 25 min de
+    # sommeil du job « relancer » : toute exécution programmée tombant dans
+    # cette fenêtre était annulée, et un « relancer » bloqué gelait tout le
+    # tableau de bord. Ici le groupe est rendu dès la fin du build (~2 min),
+    # ce qui suffit à empêcher deux builds d'écrire l'état en même temps.
+    concurrency:
+      group: dashboard-build
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
